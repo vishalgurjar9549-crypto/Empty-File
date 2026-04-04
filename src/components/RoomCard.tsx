@@ -33,6 +33,8 @@ export function RoomCard({
   const amenities = room?.amenities || [];
   const isPopular = room?.isPopular || false;
   const isVerified = room?.isVerified || false;
+  const weeklyViews = Math.max(1, room?.demand?.weeklyViews || 0);
+  const weeklyContacts = Math.max(1, room?.demand?.weeklyContacts || 0);
   
   // Redux State
   const { authStatus } = useAppSelector((state) => state.auth);
@@ -94,10 +96,10 @@ export function RoomCard({
           <button 
             onClick={handleFavoriteClick}
             disabled={isToggling}
-            className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer focus:outline-none ${
+            className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gold ${
               isFavorited
-                ? 'bg-red-500/90 text-white shadow-lg shadow-red-500/30 hover:bg-red-600'
-                : 'bg-black/20 text-white hover:bg-white hover:text-red-500 focus:bg-white focus:text-red-500'
+                ? 'bg-red-500/90 text-white shadow-lg shadow-red-500/30 hover:bg-red-600 focus-visible:ring-offset-slate-900'
+                : 'bg-black/20 text-white hover:bg-white hover:text-red-500 focus-visible:ring-offset-slate-100'
             } ${isToggling ? 'opacity-60' : ''}`}
             aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
@@ -128,6 +130,12 @@ export function RoomCard({
           <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-2 flex-1 leading-relaxed">
             {description}
           </p>
+
+          {room?.demand && <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 truncate">
+              👀 {weeklyViews} views this week
+              {` • `}
+              🔥 {weeklyContacts} contacts
+            </p>}
 
           <div className="h-px w-full bg-slate-100 dark:bg-slate-800 mb-4" />
 

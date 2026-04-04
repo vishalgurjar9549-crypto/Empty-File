@@ -3,15 +3,19 @@ import { Room, CreateRoomInput, UpdateRoomInput, RoomFilters } from '../models/R
 import { CloudinaryService } from './CloudinaryService';
 import { logger } from '../utils/logger';
 import { normalizeCity } from '../utils/normalize';
-import { ReviewStatus, Role } from '@prisma/client';
+import { EventType, ReviewStatus, Role } from '@prisma/client';
 import { getPrismaClient } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
+import { DemandService, DemandStats } from './DemandService';
+import { notificationService } from './NotificationService';
 export class RoomService {
   private roomRepository: IRoomRepository;
   private cloudinaryService: CloudinaryService;
+  private demandService: DemandService;
   constructor(roomRepository: IRoomRepository) {
     this.roomRepository = roomRepository;
     this.cloudinaryService = new CloudinaryService();
+    this.demandService = new DemandService(getPrismaClient());
   }
   async getAllRooms(filters: RoomFilters, requesterRole?: string): Promise<{
     rooms: Room[];
@@ -34,16 +38,12 @@ export class RoomService {
       roomType: filters.roomType,
       minPrice: filters.minPrice,
       maxPrice: filters.maxPrice,
-      isPopular: filters.isPopular,
-      onlyActive: filters.onlyActive ?? true,
-      idealFor: filters.idealFor,
-      amenities: filters.amenities,
+      onlyActive: true,
       // Only enforce APPROVED for tenant/public requests
       ...(isTenantOrPublic ? {
         reviewStatus: ReviewStatus.APPROVED
       } : {}),
       sort: filters.sort,
-      cursor: filters.cursor,
       page,
       limit
     });
@@ -75,6 +75,38 @@ export class RoomService {
       }
     }
     return room;
+  }
+
+  async getDemandStats(id: string): Promise<DemandStats> {
+    const room = await this.roomRepository.findById(id);
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    return this.demandService.getDemandStats(id);
+  }
+
+  async recordPropertyView(
+    room: Pick<Room, 'id' | 'ownerId' | 'title'>,
+    userId?: string,
+  ): Promise<void> {
+    await this.demandService.recordEvent({
+      type: EventType.PROPERTY_VIEW,
+      propertyId: room.id,
+      userId: userId || null,
+    });
+
+    if (userId && userId === room.ownerId) {
+      return;
+    }
+
+    await notificationService.onOwnerActivity({
+      ownerId: room.ownerId,
+      propertyId: room.id,
+      propertyTitle: room.title,
+      eventType: 'PROPERTY_VIEW',
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**
@@ -272,7 +304,9 @@ export class RoomService {
     if (!room) {
       throw new Error('Room not found');
     }
-    if (room.ownerId !== ownerId) {
+    // Allow ADMIN to bypass ownership check
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'admin';
+    if (!isAdmin && room.ownerId !== ownerId) {
       throw new Error('You can only update your own properties');
     }
 
@@ -309,12 +343,14 @@ export class RoomService {
     }
     return updatedRoom;
   }
-  async deleteRoom(roomId: string, userId: string): Promise<void> {
+  async deleteRoom(roomId: string, userId: string, requesterRole?: string): Promise<void> {
     const room = await this.roomRepository.findById(roomId);
     if (!room) {
       throw new Error('Room not found');
     }
-    if (room.ownerId !== userId) {
+    // Allow ADMIN to bypass ownership check
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'admin';
+    if (!isAdmin && room.ownerId !== userId) {
       throw new Error('Unauthorized to delete this room');
     }
 
@@ -331,13 +367,15 @@ export class RoomService {
     }
     await this.roomRepository.delete(roomId);
   }
-  async toggleRoomStatus(id: string, ownerId: string): Promise<Room> {
+  async toggleRoomStatus(id: string, ownerId: string, requesterRole?: string): Promise<Room> {
     // console.log('[RoomService] Toggling room status for room:', id);
     const room = await this.roomRepository.findById(id);
     if (!room) {
       throw new Error('Room not found');
     }
-    if (room.ownerId !== ownerId) {
+    // Allow ADMIN to bypass ownership check
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'admin';
+    if (!isAdmin && room.ownerId !== ownerId) {
       throw new Error('You can only update your own properties');
     }
     // console.log('[RoomService] Toggling room status for room: from RoomService', id); // working

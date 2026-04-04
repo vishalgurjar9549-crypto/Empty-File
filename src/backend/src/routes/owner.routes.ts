@@ -27,4 +27,9 @@ router.get('/me/rooms', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), 
  * Owner bookings
  */
 router.get('/me/bookings', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), (req, res, next) => ownerController.getMyBookings(req as any, res));
+
+/**
+ * Owner recent activity
+ */
+router.get('/me/activity', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), (req, res, next) => ownerController.getRecentActivity(req as any, res));
 export default router;

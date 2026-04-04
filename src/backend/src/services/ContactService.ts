@@ -1,9 +1,11 @@
-import { PrismaClient, Prisma, ReviewStatus } from '@prisma/client';
+import { PrismaClient, Prisma, ReviewStatus, EventType } from '@prisma/client';
 import { getPrismaClient } from '../utils/prisma';
 import { logger } from '../utils/logger';
 import { NotFoundError, ForbiddenError, AppError, BusinessLogicError, PhoneRequiredError } from '../errors/AppErrors';
 import { PlanLimitService } from './PlanLimitService';
 import { normalizeCity } from '../utils/normalize';
+import { DemandService } from './DemandService';
+import { notificationService } from './NotificationService';
 const MAX_SERIALIZATION_RETRIES = 2;
 export interface UnlockContactResult {
   ownerName: string;
@@ -20,9 +22,11 @@ export interface ReadContactResult {
 export class ContactService {
   private prisma: PrismaClient;
   private planLimitService: PlanLimitService;
+  private demandService: DemandService;
   constructor(prismaClient?: PrismaClient, planLimitService?: PlanLimitService) {
     this.prisma = prismaClient || getPrismaClient();
     this.planLimitService = planLimitService || new PlanLimitService(this.prisma);
+    this.demandService = new DemandService(this.prisma);
   }
 
   /**
@@ -36,6 +40,43 @@ export class ContactService {
       return (error as any).code === '40001';
     }
     return false;
+  }
+
+  private async emitOwnerInterestNotification(params: {
+    propertyId: string;
+    eventType: 'CONTACT_UNLOCK' | 'CONTACT_ACCESS';
+    timestamp: string;
+  }): Promise<void> {
+    try {
+      const room = await this.prisma.room.findUnique({
+        where: {
+          id: params.propertyId
+        },
+        select: {
+          id: true,
+          title: true,
+          ownerId: true
+        }
+      });
+
+      if (!room) {
+        return;
+      }
+
+      await notificationService.onOwnerContactInterest({
+        ownerId: room.ownerId,
+        propertyId: room.id,
+        propertyTitle: room.title,
+        eventType: params.eventType,
+        timestamp: params.timestamp
+      });
+    } catch (error: any) {
+      logger.warn('Failed to emit owner contact interest notification', {
+        propertyId: params.propertyId,
+        eventType: params.eventType,
+        error: error?.message || 'Unknown error'
+      });
+    }
   }
 
   /**
@@ -68,7 +109,13 @@ export class ContactService {
     let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
       try {
-        return await this.executeUnlockTransaction(tenantId, roomId);
+        const result = await this.executeUnlockTransaction(tenantId, roomId);
+        void this.emitOwnerInterestNotification({
+          propertyId: roomId,
+          eventType: result.alreadyUnlocked ? 'CONTACT_ACCESS' : 'CONTACT_UNLOCK',
+          timestamp: new Date().toISOString()
+        });
+        return result;
       } catch (error: unknown) {
         lastError = error;
         if (!this.isSerializationError(error)) {
@@ -145,6 +192,20 @@ export class ContactService {
       if (!owner) {
         throw new NotFoundError('Owner', room.ownerId);
       }
+      await this.demandService.recordEvent({
+        type: EventType.CONTACT_ACCESS,
+        propertyId: roomId,
+        userId: tenantId,
+        metadata: {
+          source: 'read_contact',
+          accessMode: 'previous_unlock'
+        }
+      });
+      void this.emitOwnerInterestNotification({
+        propertyId: roomId,
+        eventType: 'CONTACT_ACCESS',
+        timestamp: new Date().toISOString()
+      });
       return {
         ownerName: owner.name,
         ownerPhone: owner.phone,
@@ -182,6 +243,21 @@ export class ContactService {
         if (!owner) {
           throw new NotFoundError('Owner', room.ownerId);
         }
+        await this.demandService.recordEvent({
+          type: EventType.CONTACT_ACCESS,
+          propertyId: roomId,
+          userId: tenantId,
+          metadata: {
+            source: 'read_contact',
+            accessMode: 'active_plan',
+            plan: effectivePlan
+          }
+        });
+        void this.emitOwnerInterestNotification({
+          propertyId: roomId,
+          eventType: 'CONTACT_ACCESS',
+          timestamp: new Date().toISOString()
+        });
         return {
           ownerName: owner.name,
           ownerPhone: owner.phone,
@@ -323,6 +399,19 @@ export class ContactService {
           plan: effectivePlan
         });
       }
+
+      await tx.event.create({
+        data: {
+          type: alreadyUnlocked ? EventType.CONTACT_ACCESS : EventType.CONTACT_UNLOCK,
+          propertyId: roomId,
+          userId: tenantId,
+          metadata: {
+            city: normalizedRoomCity,
+            plan: effectivePlan,
+            source: 'unlock_contact'
+          }
+        }
+      });
 
       // ================================================================
       // 9. FETCH AND RETURN OWNER CONTACT — ONLY NOW

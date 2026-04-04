@@ -33,6 +33,9 @@ export interface User {
   role: Role;
   createdAt: string;
   updatedAt: string;
+  // ==================== OWNER ENGAGEMENT TRACKING (PROMPT 2) ====================
+  lastLoginAt?: string | null;
+  lastPropertyUpdateAt?: string | null;
 }
 export interface AuthResponse {
   user: User;
@@ -100,20 +103,25 @@ export interface Room {
   // Admin Review Fields
   reviewStatus?: ReviewStatus;
   adminFeedback?: AdminFeedback;
+  demand?: {
+    weeklyViews: number;
+    weeklyContacts: number;
+  };
+  // ==================== CONTACT TRACKING (PROMPT 1) ====================
+  lastContactedAt?: string | null;
+  contactCount?: number;
+  // ==================== ENGAGEMENT TRACKING (PROMPT 2) ====================
+  lastPropertyUpdateAt?: string | null;
 }
 export interface RoomFilters {
   city?: string;
   minPrice?: string;
   maxPrice?: string;
   roomType?: string;
-  idealFor?: string;
-  amenities?: string;
-  isPopular?: string;
-  isVerified?: string;
-  onlyActive?: string;
   sort?: string;
   page?: number;
   limit?: number;
+  cursor?: string;
 }
 export interface CreateRoomInput {
   title: string;
@@ -164,6 +172,52 @@ export interface OwnerSummary {
   totalRooms: number;
   totalLeads: number;
   totalEarnings: number;
+}
+
+export interface DemandStats {
+  totalViews: number;
+  totalContacts: number;
+  todayViews: number;
+  todayContacts: number;
+}
+
+export interface OwnerActivityItem {
+  id: string;
+  type: "PROPERTY_VIEW" | "CONTACT_UNLOCK" | "CONTACT_ACCESS";
+  propertyId: string;
+  propertyTitle: string;
+  createdAt: string;
+}
+
+export interface NotificationPayload {
+  propertyId?: string;
+  propertyTitle?: string;
+  propertyCity?: string;
+  timestamp?: string;
+  eventType?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  recipientId: string;
+  type: string;
+  title: string;
+  message: string;
+  payload: NotificationPayload | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  data: AppNotification[];
+  meta: {
+    total: number;
+    page: number;
+    pageSize: number;
+    hasMore: boolean;
+    unreadCount: number;
+  };
 }
 
 // Profile Types

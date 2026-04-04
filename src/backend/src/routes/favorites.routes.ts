@@ -1,7 +1,7 @@
-import { Router } from 'express';
-import { FavoriteController } from '../controllers/FavoriteController';
-import { FavoriteService } from '../services/FavoriteService';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { Router } from "express";
+import { FavoriteController } from "../controllers/FavoriteController";
+import { FavoriteService } from "../services/FavoriteService";
+import { authMiddleware } from "../middleware/auth.middleware";
 
 const router = Router();
 const favoriteService = new FavoriteService();
@@ -22,26 +22,28 @@ const favoriteController = new FavoriteController(favoriteService);
 
 // ✅ POST /favorites/toggle — Toggle favorite (add or remove)
 // Used for optimistic UI updates (button click instantly updates)
-router.post(
-  '/toggle',
-  authMiddleware,
-  (req, res, next) => favoriteController.toggleFavorite(req as any, res, next)
-);
+router.get("/", authMiddleware, async (req, res, next) => {
+  try {
+    await favoriteController.getFavorites(req as any, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
 
-// ✅ GET /favorites — Get user's favorite room IDs
-// Lightweight endpoint for quick favorites check on app load
-router.get(
-  '/',
-  authMiddleware,
-  (req, res, next) => favoriteController.getFavorites(req as any, res, next)
-);
+router.post("/toggle", authMiddleware, async (req, res, next) => {
+  try {
+    await favoriteController.toggleFavorite(req as any, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
 
-// ✅ GET /favorites/details — Get full favorites with room details
-// Used for favorites/wishlist page
-router.get(
-  '/details',
-  authMiddleware,
-  (req, res, next) => favoriteController.getFavoritesWithDetails(req as any, res, next)
-);
+router.get("/details", authMiddleware, async (req, res, next) => {
+  try {
+    await favoriteController.getFavoritesWithDetails(req as any, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

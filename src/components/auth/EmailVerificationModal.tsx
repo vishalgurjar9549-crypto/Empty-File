@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
-import { X, Mail, Clock, AlertCircle } from "lucide-react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { AlertCircle, Clock, Mail, ShieldCheck, X } from "lucide-react";
 import axiosInstance from "../../api/axios";
 
 interface EmailVerificationModalProps {
@@ -10,34 +10,17 @@ interface EmailVerificationModalProps {
   onError: (error: string) => void;
 }
 
-/**
- * ═════════════════════════════════════════════════════════════════════
- * EMAIL VERIFICATION MODAL
- * ═════════════════════════════════════════════════════════════════════
- *
- * Triggered when API returns:
- * {
- *   code: "EMAIL_VERIFICATION_REQUIRED",
- *   message: "Please verify your email before proceeding"
- * }
- *
- * Features:
- * - 2-step verification (send OTP → verify OTP)
- * - Auto-filled email (shows current user's email)
- * - Resend with cooldown
- * - On success: Close modal + retry previous action automatically
- *
- * Use Case: User tries to create a property without email verification
- */
-
 type Step = "send" | "verify";
+
+const EMAIL_REGEX =
+  /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
   isOpen,
   email,
   onSuccess,
   onClose,
-  onError: _onError,
+  onError,
 }) => {
   const [step, setStep] = useState<Step>("send");
   const [emailInput, setEmailInput] = useState(email || "");
@@ -45,73 +28,157 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [inlineError, setInlineError] = useState<string | null>(null);
+
+  // field errors
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // touched state
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [otpTouched, setOtpTouched] = useState(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+
+  const titleId = useId();
+  const descriptionId = useId();
+  const emailErrorId = useId();
+  const otpErrorId = useId();
+  const serverErrorId = useId();
+
+  const normalizeEmail = (value: string) => value.trim().toLowerCase();
+  const currentEmail = normalizeEmail(emailInput);
+
+  const validateEmail = (value: string): string | null => {
+    const normalized = normalizeEmail(value);
+
+    if (!normalized) return "Please enter your email address.";
+    if (!EMAIL_REGEX.test(normalized)) return "Please enter a valid email address.";
+
+    return null;
+  };
+
+  const validateOtp = (value: string): string | null => {
+    if (!value) return "Please enter the verification code.";
+    if (!/^\d{6}$/.test(value)) return "Please enter a valid 6-digit code.";
+    return null;
+  };
+
+  const runEmailValidation = (value: string) => {
+    const error = validateEmail(value);
+    setEmailError(error);
+    return !error;
+  };
+
+  const runOtpValidation = (value: string) => {
+    const error = validateOtp(value);
+    setOtpError(error);
+    return !error;
+  };
 
   useEffect(() => {
     if (!isOpen) return;
+
     setEmailInput(email || "");
     setStep("send");
     setOtp("");
     setResendCooldown(0);
     setOtpSentToEmail(null);
-    setInlineError(null);
+
+    setEmailError(null);
+    setOtpError(null);
+    setServerError(null);
+
+    setEmailTouched(false);
+    setOtpTouched(false);
+
+    const timeout = setTimeout(() => {
+      emailInputRef.current?.focus();
+    }, 100);
+
+    return () => clearTimeout(timeout);
   }, [isOpen, email]);
 
-  // Auto-focus OTP input
   useEffect(() => {
     if (step === "verify" && otpInputRef.current) {
-      setTimeout(() => otpInputRef.current?.focus(), 100);
+      const timeout = setTimeout(() => {
+        otpInputRef.current?.focus();
+      }, 120);
+
+      return () => clearTimeout(timeout);
     }
   }, [step]);
 
-  // Handle OTP paste
   useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = originalOverflow || "auto";
+    };
+  }, [isOpen, loading, onClose]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = setTimeout(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    const input = otpInputRef.current;
+    if (!input) return;
+
     const handlePaste = (e: ClipboardEvent) => {
       const pastedData = e.clipboardData?.getData("text") || "";
-      if (/^\d{6}$/.test(pastedData)) {
-        setOtp(pastedData);
+      const cleaned = pastedData.replace(/\D/g, "").slice(0, 6);
+
+      if (cleaned.length === 6) {
+        setOtp(cleaned);
+        setOtpTouched(true);
+        setOtpError(null);
+        setServerError(null);
         e.preventDefault();
       }
     };
 
-    const input = otpInputRef.current;
-    if (input) {
-      input.addEventListener("paste", handlePaste);
-      return () => input.removeEventListener("paste", handlePaste);
-    }
-  }, []);
-
-  // Cooldown timer
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(
-        () => setResendCooldown(resendCooldown - 1),
-        1000,
-      );
-      return () => clearTimeout(timer);
-    }
-  }, [resendCooldown]);
+    input.addEventListener("paste", handlePaste);
+    return () => input.removeEventListener("paste", handlePaste);
+  }, [step]);
 
   if (!isOpen) return null;
 
-  const normalizeEmail = (value: string) => value.trim().toLowerCase();
-  const currentEmail = normalizeEmail(emailInput);
+  const isEmailValid = !validateEmail(emailInput);
+  const isOtpValid = !validateOtp(otp);
 
-  // ═════════════════════════════════════════════════════════════════════
-  // REQUEST OTP
-  // ═════════════════════════════════════════════════════════════════════
   const handleSendOTP = async () => {
-    setInlineError(null);
-    if (!currentEmail) {
-      setInlineError("Please enter your email");
-      return;
-    }
+    setServerError(null);
+    setEmailTouched(true);
+
+    const validEmail = runEmailValidation(emailInput);
+    if (!validEmail) return;
 
     setLoading(true);
+
     try {
       const token = localStorage.getItem("kangaroo_token");
-      console.log("SENDING EMAIL:", currentEmail);
+
       const response = await axiosInstance.post(
         "/auth/send-email-otp",
         { email: currentEmail },
@@ -121,44 +188,52 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
                 Authorization: `Bearer ${token}`,
               },
             }
-          : undefined,
+          : undefined
       );
+
       const data: any = response?.data;
 
       if (!data?.success) {
-        setInlineError(data?.message || "Failed to send OTP");
+        const message = data?.message || "Failed to send verification code.";
+        setServerError(message);
+        onError(message);
         return;
       }
 
       setStep("verify");
       setResendCooldown(30);
       setOtpSentToEmail(currentEmail);
+      setOtp("");
+      setOtpTouched(false);
+      setOtpError(null);
+      setServerError(null);
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || error?.message || "Network error";
-      setInlineError(message);
+        error?.response?.data?.message ||
+        error?.message ||
+        "Unable to send verification code.";
+      setServerError(message);
+      onError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ═════════════════════════════════════════════════════════════════════
-  // VERIFY OTP
-  // ═════════════════════════════════════════════════════════════════════
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInlineError(null);
 
-    if (!currentEmail) {
-      setInlineError("Please enter your email");
-      return;
-    }
+    setServerError(null);
+    setEmailTouched(true);
+    setOtpTouched(true);
 
-    // If user edits email after sending OTP, they must resend to new email.
+    const validEmail = runEmailValidation(emailInput);
+    const validOtp = runOtpValidation(otp);
+
+    if (!validEmail || !validOtp) return;
+
     if (otpSentToEmail && currentEmail !== otpSentToEmail) {
-      setInlineError(
-        "Email changed. Please send a new code to the updated email.",
-      );
+      const message = "Email changed. Please send a new code to the updated email.";
+      setServerError(message);
       setStep("send");
       setOtp("");
       setResendCooldown(0);
@@ -166,15 +241,11 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
       return;
     }
 
-    if (otp.length !== 6 || !/^\d+$/.test(otp)) {
-      setInlineError("Please enter a valid 6-digit OTP");
-      return;
-    }
-
     setLoading(true);
+
     try {
-      // verify-email-otp is protected by authMiddleware
       const token = localStorage.getItem("kangaroo_token");
+
       const response = await axiosInstance.post(
         "/auth/verify-email-otp",
         {
@@ -187,7 +258,7 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
                 Authorization: `Bearer ${token}`,
               },
             }
-          : undefined,
+          : undefined
       );
 
       const data: any = response?.data;
@@ -195,9 +266,9 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
       if (!data?.success) {
         if (
           data?.code === "INVALID_OTP" &&
-          String(data?.message || "").includes("expired")
+          String(data?.message || "").toLowerCase().includes("expired")
         ) {
-          setInlineError("OTP expired. Please request a new one.");
+          setServerError("Code expired. Please request a new one.");
           setStep("send");
           setOtp("");
           setResendCooldown(0);
@@ -205,182 +276,305 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
           return;
         }
 
-        setInlineError(data?.message || "OTP verification failed");
+        const message = data?.message || "Verification failed.";
+        setServerError(message);
+        onError(message);
         return;
       }
 
-      // ✅ VERIFICATION SUCCESSFUL
       onSuccess();
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || error?.message || "Network error";
-      setInlineError(message);
+        error?.response?.data?.message ||
+        error?.message ||
+        "Unable to verify code.";
+      setServerError(message);
+      onError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ═════════════════════════════════════════════════════════════════════
-  // RESEND OTP
-  // ═════════════════════════════════════════════════════════════════════
   const handleResend = async () => {
     if (resendCooldown > 0 || loading) return;
     await handleSendOTP();
   };
 
-  const EmailField = (
-    <div className="mt-4">
-      <label className="block text-sm font-semibold text-gray-700 mb-1">
-        Email
-      </label>
-      <input
-        type="email"
-        value={emailInput}
-        onChange={(e) => setEmailInput(e.target.value)}
-        disabled={loading}
-        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
-        placeholder="you@example.com"
-      />
-    </div>
-  );
-
-  const InlineError = inlineError ? (
-    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {inlineError}
-    </div>
-  ) : null;
-
-  const hasSentTo =
-    otpSentToEmail && step === "verify" ? (
-      <p className="text-gray-500 text-xs mt-2 text-center">
-        Code sent to <span className="font-semibold">{otpSentToEmail}</span>
-      </p>
-    ) : null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+      aria-hidden={!isOpen}
+    >
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black bg-opacity-50"
-        onClick={onClose}
-      ></div>
+      <button
+        type="button"
+        aria-label="Close email verification modal"
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+        onClick={() => !loading && onClose()}
+      />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 mx-4">
-        {/* Close Button */}
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-2xl shadow-black/20 dark:shadow-black/50 animate-in fade-in zoom-in-95 duration-200 "
+      >
+        {/* Close */}
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-1"
+          type="button"
+          onClick={() => !loading && onClose()}
+          aria-label="Close modal"
+          className="absolute right-4 top-4 z-10 inline-flex h-10 w-10  items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
         >
-          <X className="w-5 h-5" />
+          <X className="h-5 w-5" />
         </button>
 
-        {/* Alert */}
-        <div className="flex items-start gap-3 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-medium text-gray-900 text-sm">
-              Email Verification Required
-            </p>
-            <p className="text-gray-600 text-xs mt-1">
-              Verify your email to continue with this action
-            </p>
-          </div>
-        </div>
+        {/* Top accent */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-gold via-amber-400 to-gold" />
 
-        {step === "send" ? (
-          // ═════════════════════════════════════════════════════════════════════
-          // STEP 1: SEND OTP
-          // ═════════════════════════════════════════════════════════════════════
-          <div>
-            <div className="text-center mb-6">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mx-auto mb-3">
-                <Mail className="w-6 h-6 text-blue-600" />
+        <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-6 sm:pb-8 ">
+          {/* Info banner */}
+          <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-900/20 px-4 py-3.5">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40">
+                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">
-                Verify email
-              </h3>
-              <p className="text-gray-600 text-sm">
-                Enter the email where you want to receive the code
-              </p>
-              {EmailField}
-              {InlineError}
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Email verification required
+                </p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  Verify your email to continue with this action securely.
+                </p>
+              </div>
             </div>
-
-            <button
-              onClick={handleSendOTP}
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            >
-              {loading ? "Sending..." : "Send Verification Code"}
-            </button>
           </div>
-        ) : (
-          // ═════════════════════════════════════════════════════════════════════
-          // STEP 2: VERIFY OTP
-          // ═════════════════════════════════════════════════════════════════════
-          <form onSubmit={handleVerifyOTP}>
-            <div className="mb-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">
-                Enter verification code
-              </h3>
-              <p className="text-gray-600 text-sm text-center">
-                Check your email for the 6-digit code
-              </p>
-              {hasSentTo}
-              {EmailField}
-              {InlineError}
+
+          {/* Header */}
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-navy/5 dark:bg-white/5 ring-1 ring-slate-200 dark:ring-slate-700">
+              {step === "send" ? (
+                <Mail className="h-8 w-8 text-navy dark:text-white" />
+              ) : (
+                <ShieldCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              )}
             </div>
 
-            {/* OTP Input */}
-            <div className="mb-6">
-              <input
-                ref={otpInputRef}
-                type="text"
-                value={otp}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setOtp(value);
-                }}
-                placeholder="000000"
-                maxLength={6}
-                className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-center text-3xl font-bold tracking-widest transition-colors"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Verify Button */}
-            <button
-              type="submit"
-              disabled={loading || otp.length !== 6}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 mb-4"
+            <h2
+              id={titleId}
+              className="text-2xl sm:text-3xl font-bold font-playfair text-navy dark:text-white"
             >
-              {loading ? "Verifying..." : "Verify & Continue"}
-            </button>
+              {step === "send" ? "Verify your email" : "Enter verification code"}
+            </h2>
 
-            {/* Resend Code */}
-            <div className="text-center">
-              <p className="text-gray-600 text-sm mb-3">
-                Didn't receive the code?
+            <p
+              id={descriptionId}
+              className="mt-2 text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-md mx-auto"
+            >
+              {step === "send"
+                ? "We’ll send a 6-digit verification code to your email address."
+                : "Enter the 6-digit code we sent to continue securely."}
+            </p>
+
+            {step === "verify" && otpSentToEmail && (
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                Sent to{" "}
+                <span className="font-semibold text-slate-800 dark:text-slate-200 break-all">
+                  {otpSentToEmail}
+                </span>
               </p>
+            )}
+          </div>
+
+          {/* Server Error */}
+          {serverError && (
+            <div
+              id={serverErrorId}
+              role="alert"
+              className="mb-5 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300"
+            >
+              {serverError}
+            </div>
+          )}
+
+          {step === "send" ? (
+            <div className="space-y-5">
+              <div>
+                <label
+                  htmlFor="verification-email"
+                  className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  Email address
+                </label>
+                <input
+                  ref={emailInputRef}
+                  id="verification-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    if (emailTouched) runEmailValidation(e.target.value);
+                    setServerError(null);
+                  }}
+                  onBlur={() => {
+                    setEmailTouched(true);
+                    runEmailValidation(emailInput);
+                  }}
+                  disabled={loading}
+                  aria-invalid={!!emailError}
+                  aria-describedby={emailError ? emailErrorId : undefined}
+                  placeholder="you@example.com"
+                  className={`w-full rounded-2xl border bg-white dark:bg-slate-800 px-4 py-3.5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:ring-4 ${
+                    emailError
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-500/10 dark:border-red-500"
+                      : "border-slate-300 dark:border-slate-700 focus:border-gold focus:ring-gold/10"
+                  }`}
+                />
+                {emailError && (
+                  <p
+                    id={emailErrorId}
+                    className="mt-2 text-sm text-red-600 dark:text-red-400"
+                  >
+                    {emailError}
+                  </p>
+                )}
+              </div>
+
               <button
                 type="button"
-                onClick={handleResend}
-                disabled={resendCooldown > 0 || loading}
-                className="text-blue-600 font-medium hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 mx-auto"
+                onClick={handleSendOTP}
+                disabled={loading || !isEmailValid}
+                className="w-full h-12 rounded-2xl bg-navy dark:bg-white text-white dark:text-navy font-semibold hover:bg-navy/90 dark:hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-navy/20 dark:shadow-black/20"
               >
-                {resendCooldown > 0 ? (
-                  <>
-                    <Clock className="w-4 h-4" />
-                    <span>Resend in {resendCooldown}s</span>
-                  </>
-                ) : (
-                  "Resend Code"
-                )}
+                {loading ? "Sending code..." : "Send verification code"}
               </button>
             </div>
-          </form>
-        )}
+          ) : (
+            <form onSubmit={handleVerifyOTP} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="verification-email"
+                  className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  Email address
+                </label>
+                <input
+                  id="verification-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    if (emailTouched) runEmailValidation(e.target.value);
+                    setServerError(null);
+                  }}
+                  onBlur={() => {
+                    setEmailTouched(true);
+                    runEmailValidation(emailInput);
+                  }}
+                  disabled={loading}
+                  aria-invalid={!!emailError}
+                  aria-describedby={emailError ? emailErrorId : undefined}
+                  placeholder="you@example.com"
+                  className={`w-full rounded-2xl border bg-white dark:bg-slate-800 px-4 py-3.5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:ring-4 ${
+                    emailError
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-500/10 dark:border-red-500"
+                      : "border-slate-300 dark:border-slate-700 focus:border-gold focus:ring-gold/10"
+                  }`}
+                />
+                {emailError && (
+                  <p
+                    id={emailErrorId}
+                    className="mt-2 text-sm text-red-600 dark:text-red-400"
+                  >
+                    {emailError}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="verification-otp"
+                  className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  6-digit verification code
+                </label>
+                <input
+                  ref={otpInputRef}
+                  id="verification-otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setOtp(value);
+                    if (otpTouched) runOtpValidation(value);
+                    setServerError(null);
+                  }}
+                  onBlur={() => {
+                    setOtpTouched(true);
+                    runOtpValidation(otp);
+                  }}
+                  disabled={loading}
+                  aria-invalid={!!otpError}
+                  aria-describedby={otpError ? otpErrorId : undefined}
+                  placeholder="000000"
+                  className={`w-full rounded-2xl border bg-white dark:bg-slate-800 px-4 py-4 text-center text-2xl sm:text-3xl font-bold tracking-[0.35em] text-slate-900 dark:text-white placeholder:tracking-normal placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:ring-4 ${
+                    otpError
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-500/10 dark:border-red-500"
+                      : "border-slate-300 dark:border-slate-700 focus:border-gold focus:ring-gold/10"
+                  }`}
+                />
+                {otpError && (
+                  <p
+                    id={otpErrorId}
+                    className="mt-2 text-sm text-red-600 dark:text-red-400"
+                  >
+                    {otpError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !isEmailValid || !isOtpValid}
+                className="w-full h-12 rounded-2xl bg-navy dark:bg-white text-white dark:text-navy font-semibold hover:bg-navy/90 dark:hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-navy/20 dark:shadow-black/20"
+              >
+                {loading ? "Verifying..." : "Verify & continue"}
+              </button>
+
+              <div className="pt-1 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                  Didn’t receive the code?
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || loading || !isEmailValid}
+                  className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-gold hover:text-yellow-600 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {resendCooldown > 0 ? (
+                    <>
+                      <Clock className="w-4 h-4" />
+                      Resend in {resendCooldown}s
+                    </>
+                  ) : (
+                    "Resend code"
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -26,6 +26,10 @@ model User {
   isActive                 Boolean                   @default(true)
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
+  // ==================== OWNER ENGAGEMENT TRACKING (PROMPT 2) ====================
+  lastLoginAt              DateTime?
+  lastPropertyUpdateAt     DateTime?
+  // ============================================================================
   agentPropertyAssignments AgentPropertyAssignment[] @relation("AgentPropertyAssignments")
   agentTenantAssignments   AgentTenantAssignment[]   @relation("AgentTenantAssignments")
   tenantAgentAssignments   AgentTenantAssignment[]   @relation("TenantAgentAssignments")
@@ -66,9 +70,16 @@ model Room {
   updatedAt                DateTime                  @updatedAt
   latitude                 Float?
   longitude                Float?
+  // ==================== CONTACT TRACKING (PROMPT 1) ====================
+  lastContactedAt          DateTime?
+  contactCount             Int                       @default(0)
+  // ==================== ENGAGEMENT TRACKING (PROMPT 2) ====================
+  lastPropertyUpdateAt     DateTime?
+  // ========================================================================
   agentPropertyAssignments AgentPropertyAssignment[] @relation("PropertyAssignments")
   bookings                 Booking[]
   favorites                Favorite[]
+  events                   Event[]
   propertyNotes            PropertyNote[]            @relation("PropertyNotes")
   propertyViews            PropertyView[]
   reviews                  Review[]                  @relation("RoomReviews")
@@ -80,6 +91,23 @@ model Room {
   @@index([ownerId])
   @@index([reviewStatus])
   @@index([isActive])
+  @@index([lastContactedAt])
+  @@index([contactCount])
+}
+
+model Event {
+  id         String    @id @default(uuid())
+  type       EventType
+  propertyId String?
+  userId     String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+  property   Room?     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, type, createdAt], map: "idx_event_property_type_created")
+  @@index([type, createdAt], map: "idx_event_type_created")
+  @@index([userId, createdAt], map: "idx_event_user_created")
+  @@map("events")
 }
 
 model Booking {
@@ -459,6 +487,16 @@ enum NotificationType {
   BOOKING_CREATED
   BOOKING_APPROVED
   BOOKING_REJECTED
+  OWNER_ACTIVITY
+  OWNER_CONTACT_INTEREST
+}
+
+enum EventType {
+  PROPERTY_VIEW
+  CONTACT_UNLOCK
+  CONTACT_ACCESS
+  PLAN_VIEW
+  PLAN_PURCHASE_CLICK
 }
 
 enum Role {

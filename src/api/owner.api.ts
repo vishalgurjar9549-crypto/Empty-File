@@ -1,5 +1,5 @@
 import axiosInstance from './axios';
-import { ApiResponse, OwnerSummary, Room, Booking, PropertyNote } from '../types/api.types';
+import { ApiResponse, OwnerSummary, Room, Booking, PropertyNote, OwnerActivityItem } from '../types/api.types';
 import { assertValidParam } from '../utils/apiGuard';
 export const ownerApi = {
   // Get owner dashboard summary
@@ -15,6 +15,10 @@ export const ownerApi = {
   // Get owner's bookings
   getMyBookings: async (): Promise<Booking[]> => {
     const response = await axiosInstance.get<ApiResponse<Booking[]>>('/owners/me/bookings');
+    return response.data.data;
+  },
+  getRecentActivity: async (): Promise<OwnerActivityItem[]> => {
+    const response = await axiosInstance.get<ApiResponse<OwnerActivityItem[]>>('/owners/me/activity');
     return response.data.data;
   },
   // Get property notes (read-only)

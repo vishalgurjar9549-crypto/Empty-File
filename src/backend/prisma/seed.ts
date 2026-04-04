@@ -1116,9 +1116,9 @@ async function main() {
   const planLimits = [{
     plan: 'FREE',
     city: null,
-    contactLimit: 10
+    contactLimit: 5
   },
-  // Global FREE: 10 unlocks per city
+  // Global FREE: 5 unlocks per city
   {
     plan: 'GOLD',
     city: null,
@@ -1148,7 +1148,7 @@ async function main() {
       });
     }
   }
-  console.log('✅ Created plan limits (FREE=10, GOLD=unlimited, PLATINUM=unlimited)');
+  console.log('✅ Created plan limits (FREE=5, GOLD=unlimited, PLATINUM=unlimited)');
 
   // ─── Seed Demo Agents ────────────────────────────────────────────────────────
   console.log('\n🤖 Seeding demo agents...');

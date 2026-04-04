@@ -1,4 +1,12 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   BarChart3,
   Users,
@@ -17,8 +25,10 @@ import {
   MessageSquare,
   ChevronRight,
   CheckCircle2,
-  TrendingUp,
-} from "lucide-react";
+  Bell,
+    TrendingUp,
+    
+  } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
   fetchOwnerSummary,
@@ -33,12 +43,15 @@ import { EditPropertyModal } from "../components/EditPropertyModal";
 import { PropertyNotesSection } from "../components/owner/PropertyNotesSection";
 import { BookingCard } from "../components/owner/BookingCard";
 import { BookingConfirmModal } from "../components/owner/BookingConfirmModal";
-import { Room, Booking } from "../types/api.types";
+import { Room, Booking, OwnerActivityItem, AppNotification } from "../types/api.types";
 import { Link } from "react-router-dom";
 import { ResubmitReviewWarningModal } from "../components/ResubmitReviewWarningModal";
 import { EmailVerificationModal } from "../components/auth/EmailVerificationModal";
+import { GridSkeleton, ListItemSkeleton } from "../components/ui/Skeletons";
 import { showToast } from "../store/slices/ui.slice";
 import { updateUser, getCurrentUser } from "../store/slices/auth.slice";
+import { ownerApi } from "../api/owner.api";
+import { notificationsApi } from "../api/notifications.api";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -46,6 +59,189 @@ function getGreeting(): string {
   if (hour < 17) return "Good afternoon";
   return "Good evening";
 }
+
+type GroupedActivityItem = {
+  id: string;
+  type: OwnerActivityItem["type"];
+  propertyId: string;
+  propertyTitle: string;
+  createdAt: string;
+  count: number;
+  sourceIds: string[];
+};
+
+type GroupedNotificationItem = {
+  id: string;
+  type: string;
+  propertyId?: string;
+  propertyTitle?: string;
+  createdAt: string;
+  count: number;
+  sourceIds: string[];
+  unreadIds: string[];
+  isRead: boolean;
+  eventType?: string;
+  message: string;
+};
+
+function formatActivityTime(createdAt: string, nowMs: number): string {
+  const diffMs = Math.max(0, nowMs - new Date(createdAt).getTime());
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function getActivityCopy(
+  activity: Pick<GroupedActivityItem, "type" | "count">,
+): string {
+  switch (activity.type) {
+    case "PROPERTY_VIEW":
+      return activity.count > 1
+        ? `🔥 ${activity.count} people viewed your property`
+        : "🔥 Someone viewed your property";
+    case "CONTACT_UNLOCK":
+      return activity.count > 1
+        ? `📞 ${activity.count} people unlocked your contact`
+        : "📞 Someone unlocked your contact today";
+    case "CONTACT_ACCESS":
+      return activity.count > 1
+        ? `📞 ${activity.count} people revisited your contact details`
+        : "📞 Someone revisited your contact details";
+    default:
+      return "🔥 Someone interacted with your property";
+  }
+}
+
+function getNotificationLead(
+  notification: Pick<GroupedNotificationItem, "eventType">,
+): string {
+  switch (notification.eventType) {
+    case "PROPERTY_VIEW":
+      return "🔥";
+    case "CONTACT_UNLOCK":
+    case "CONTACT_ACCESS":
+      return "📞";
+    default:
+      return "🔔";
+  }
+}
+
+function isWithinMinutes(createdAt: string, minutes: number, nowMs: number) {
+  return nowMs - new Date(createdAt).getTime() < minutes * 60 * 1000;
+}
+
+function isToday(createdAt: string, nowMs: number) {
+  const date = new Date(createdAt);
+  const now = new Date(nowMs);
+  return (
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  );
+}
+
+function buildGroupedActivityFeed(
+  activityItems: OwnerActivityItem[],
+): GroupedActivityItem[] {
+  const grouped = new Map<string, GroupedActivityItem>();
+
+  activityItems.forEach((activity) => {
+    const key = `${activity.propertyId}:${activity.type}`;
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      existing.sourceIds.push(activity.id);
+      if (
+        new Date(activity.createdAt).getTime() >
+        new Date(existing.createdAt).getTime()
+      ) {
+        existing.createdAt = activity.createdAt;
+      }
+      return;
+    }
+
+    grouped.set(key, {
+      id: key,
+      type: activity.type,
+      propertyId: activity.propertyId,
+      propertyTitle: activity.propertyTitle,
+      createdAt: activity.createdAt,
+      count: 1,
+      sourceIds: [activity.id],
+    });
+  });
+
+  return Array.from(grouped.values()).sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+function buildGroupedNotifications(
+  notificationItems: AppNotification[],
+): GroupedNotificationItem[] {
+  const grouped = new Map<string, GroupedNotificationItem>();
+
+  notificationItems.forEach((notification) => {
+    const eventType = notification.payload?.eventType;
+    const propertyId = notification.payload?.propertyId;
+    const key =
+      eventType && propertyId
+        ? `${propertyId}:${eventType}`
+        : `notification:${notification.id}`;
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      existing.sourceIds.push(notification.id);
+      if (!notification.isRead) {
+        existing.unreadIds.push(notification.id);
+        existing.isRead = false;
+      }
+      if (
+        new Date(notification.createdAt).getTime() >
+        new Date(existing.createdAt).getTime()
+      ) {
+        existing.createdAt = notification.createdAt;
+      }
+      return;
+    }
+
+    grouped.set(key, {
+      id: key,
+      type: notification.type,
+      propertyId,
+      propertyTitle: notification.payload?.propertyTitle,
+      createdAt: notification.createdAt,
+      count: 1,
+      sourceIds: [notification.id],
+      unreadIds: notification.isRead ? [] : [notification.id],
+      isRead: notification.isRead,
+      eventType,
+      message: notification.message,
+    });
+  });
+
+  return Array.from(grouped.values()).sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+function getRandomRefreshDelay() {
+  return 20000 + Math.floor(Math.random() * 20001);
+}
+
 export function Dashboard() {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
@@ -61,6 +257,15 @@ export function Dashboard() {
   );
   const [isUpgradeConfirmOpen, setIsUpgradeConfirmOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [recentActivity, setRecentActivity] = useState<OwnerActivityItem[]>([]);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [newActivityIds, setNewActivityIds] = useState<string[]>([]);
+  const [newNotificationIds, setNewNotificationIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"properties" | "bookings">(
     "properties",
   );
@@ -83,15 +288,166 @@ export function Dashboard() {
     action: "approve",
   });
   const userRole = user?.role?.toUpperCase();
+  const notificationBellRef = useRef<HTMLDivElement | null>(null);
+  const previousActivityIdsRef = useRef<Set<string>>(new Set());
+  const previousNotificationIdsRef = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const groupedActivity = useMemo(
+    () => buildGroupedActivityFeed(recentActivity),
+    [recentActivity],
+  );
+  const groupedNotifications = useMemo(
+    () => buildGroupedNotifications(notifications),
+    [notifications],
+  );
+  const latestActivityAt = useMemo(() => {
+    const latestActivity = recentActivity[0]?.createdAt;
+    const latestNotification = notifications[0]?.createdAt;
+    if (!latestActivity) return latestNotification || null;
+    if (!latestNotification) return latestActivity;
+    return new Date(latestActivity).getTime() >=
+      new Date(latestNotification).getTime()
+      ? latestActivity
+      : latestNotification;
+  }, [notifications, recentActivity]);
+  const isLiveActivity = latestActivityAt
+    ? isWithinMinutes(latestActivityAt, 2, nowMs)
+    : false;
+  const hasActivityToday = useMemo(
+    () =>
+      recentActivity.some((activity) => isToday(activity.createdAt, nowMs)) ||
+      notifications.some((notification) => isToday(notification.createdAt, nowMs)),
+    [notifications, nowMs, recentActivity],
+  );
+
+  const flashNewIds = useCallback(
+    (
+      ids: string[],
+      setter: Dispatch<SetStateAction<string[]>>,
+    ) => {
+      if (ids.length === 0) return;
+      setter((current) => Array.from(new Set([...current, ...ids])));
+      window.setTimeout(() => {
+        setter((current) => current.filter((id) => !ids.includes(id)));
+      }, 4500);
+    },
+    [],
+  );
+
+  const loadOwnerNotifications = useCallback(
+    async (initialLoad: boolean = false) => {
+      setIsNotificationsLoading(initialLoad);
+      try {
+        const result = await notificationsApi.getMyNotifications();
+        const nextIds = new Set(result.data.map((item) => item.id));
+        const newIds =
+          previousNotificationIdsRef.current.size === 0
+            ? []
+            : result.data
+                .filter((item) => !previousNotificationIdsRef.current.has(item.id))
+                .map((item) => item.id);
+
+        previousNotificationIdsRef.current = nextIds;
+        setNotifications(result.data);
+        setUnreadNotificationCount(result.meta.unreadCount);
+        flashNewIds(newIds, setNewNotificationIds);
+      } catch {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+      } finally {
+        setIsNotificationsLoading(false);
+      }
+    },
+    [flashNewIds],
+  );
+
+  const loadOwnerActivity = useCallback(
+    async (initialLoad: boolean = false) => {
+      setIsActivityLoading(initialLoad);
+      try {
+        const activity = await ownerApi.getRecentActivity();
+        const nextIds = new Set(activity.map((item) => item.id));
+        const newIds =
+          previousActivityIdsRef.current.size === 0
+            ? []
+            : activity
+                .filter((item) => !previousActivityIdsRef.current.has(item.id))
+                .map((item) => item.id);
+
+        previousActivityIdsRef.current = nextIds;
+        setRecentActivity(activity);
+        flashNewIds(newIds, setNewActivityIds);
+      } catch {
+        setRecentActivity([]);
+      } finally {
+        setIsActivityLoading(false);
+      }
+    },
+    [flashNewIds],
+  );
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
   useEffect(() => {
     if (userRole === "OWNER") {
+      let cancelled = false;
+
       dispatch(fetchOwnerSummary());
       dispatch(fetchOwnerRooms());
       dispatch(fetchOwnerBookings());
+      void loadOwnerActivity(true);
+      void loadOwnerNotifications(true);
+
+      const scheduleRefresh = () => {
+        refreshTimerRef.current = window.setTimeout(async () => {
+          if (cancelled) return;
+          setNowMs(Date.now());
+          await Promise.all([
+            loadOwnerActivity(false),
+            loadOwnerNotifications(false),
+          ]);
+          if (!cancelled) {
+            scheduleRefresh();
+          }
+        }, getRandomRefreshDelay());
+      };
+
+      scheduleRefresh();
+
+      return () => {
+        cancelled = true;
+        if (refreshTimerRef.current) {
+          window.clearTimeout(refreshTimerRef.current);
+        }
+      };
     } else if (userRole === "TENANT") {
       dispatch(fetchCurrentSubscription());
     }
-  }, [dispatch, userRole]);
+  }, [dispatch, loadOwnerActivity, loadOwnerNotifications, userRole]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        notificationBellRef.current &&
+        !notificationBellRef.current.contains(event.target as Node)
+      ) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
   if (!user) return null;
 
   const openAddPropertyFlow = () => {
@@ -122,6 +478,43 @@ export function Dashboard() {
     setIsEmailVerificationOpen(false);
     setPostVerifyAction(null);
   };
+
+  const handleNotificationClick = useCallback(
+    async (notification: GroupedNotificationItem) => {
+      if (!notification.isRead && notification.unreadIds.length > 0) {
+        try {
+          const updatedNotifications = await Promise.all(
+            notification.unreadIds.map((id) => notificationsApi.markAsRead(id)),
+          );
+
+          const updatedMap = new Map(
+            updatedNotifications.map((item) => [item.id, item]),
+          );
+
+          setNotifications((current) =>
+            current.map((item) => updatedMap.get(item.id) || item),
+          );
+          setUnreadNotificationCount((current) =>
+            Math.max(0, current - notification.unreadIds.length),
+          );
+        } catch {
+          dispatch(
+            showToast({
+              message: "Failed to mark notification as read",
+              type: "error",
+            }),
+          );
+        }
+      }
+
+      setIsNotificationsOpen(false);
+
+      if (notification.propertyId) {
+        setActiveTab("properties");
+      }
+    },
+    [dispatch],
+  );
 
   // TENANT DASHBOARD
   if (userRole === "TENANT") {
@@ -204,33 +597,33 @@ export function Dashboard() {
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-12">
-          <div className="mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-navy dark:text-white font-playfair">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-navy dark:text-white font-playfair mb-1">
               Tenant Dashboard
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
               Welcome back, {user.name}
             </p>
           </div>
 
           {/* Multi-City Subscriptions */}
           {subscriptions.length > 1 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-bold text-navy dark:text-white font-playfair mb-4 flex items-center gap-2">
+            <div className="mb-6 sm:mb-8">
+              <h2 className="text-lg sm:text-xl font-bold text-navy dark:text-white font-playfair mb-4 flex items-center gap-2">
                 <Crown className="w-5 h-5 text-gold" />
                 Your Active Plans
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
                 {subscriptions.map((sub: any) => (
                   <div
                     key={sub.id || `${sub.plan}-${sub.city}`}
-                    className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-100 dark:border-slate-700 shadow-sm"
+                    className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 md:p-6 border border-slate-100 dark:border-slate-700 shadow-sm"
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3 gap-2">
                       <div className="flex items-center gap-2">
                         <Crown
-                          className={`w-5 h-5 ${
+                          className={`w-5 h-5 flex-shrink-0 ${
                             sub.plan === "PLATINUM"
                               ? "text-purple-500"
                               : "text-gold"
@@ -238,7 +631,7 @@ export function Dashboard() {
                         />
 
                         <span
-                          className={`text-lg font-bold ${
+                          className={`text-base sm:text-lg font-bold ${
                             sub.plan === "PLATINUM"
                               ? "text-purple-600 dark:text-purple-400"
                               : "text-gold"
@@ -247,14 +640,14 @@ export function Dashboard() {
                           {sub.plan}
                         </span>
                       </div>
-                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full capitalize">
+                      <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full capitalize whitespace-nowrap">
                         {sub.city}
                       </span>
                     </div>
                     {sub.expiresAt && (
                       <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Expires {new Date(sub.expiresAt).toLocaleDateString()}
+                        <Clock className="w-3 h-3 flex-shrink-0" />
+                        <span>Expires {new Date(sub.expiresAt).toLocaleDateString()}</span>
                       </p>
                     )}
                   </div>
@@ -264,9 +657,9 @@ export function Dashboard() {
           )}
 
           {/* Subscription Status Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-navy/5 dark:shadow-black/20 border border-slate-100 dark:border-slate-700 overflow-hidden mb-8">
-            <div className="bg-gradient-to-r from-navy to-navy-light p-6 text-white">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-navy/5 dark:shadow-black/20 border border-slate-100 dark:border-slate-700 overflow-hidden mb-6 sm:mb-8">
+            <div className="bg-gradient-to-r from-navy to-navy-light p-4 sm:p-5 md:p-6 text-white">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <Crown className="w-6 h-6 text-gold" />
@@ -292,7 +685,7 @@ export function Dashboard() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-5 md:p-6">
               {plan === "FREE" ? (
                 <>
                   <div className="mb-6">
@@ -324,28 +717,34 @@ export function Dashboard() {
                         : "Upgrade to view more properties"}
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div className="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
-                      <Eye className="w-5 h-5 text-navy dark:text-white mb-2" />
-                      <p className="text-sm font-medium text-navy dark:text-white">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-3 md:gap-4">
+                    <div className="p-3 sm:p-4 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <Eye className="w-5 h-5 text-navy dark:text-white flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-sm font-medium text-navy dark:text-white mb-1">
                         {viewLimit} Free Views
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         First {viewLimit} properties
                       </p>
                     </div>
-                    <div className="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
-                      <AlertCircle className="w-5 h-5 text-orange-500 mb-2" />
-                      <p className="text-sm font-medium text-navy dark:text-white">
+                    <div className="p-3 sm:p-4 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-sm font-medium text-navy dark:text-white mb-1">
                         Limited Contact
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         Upgrade to view owner details
                       </p>
                     </div>
-                    <div className="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
-                      <Crown className="w-5 h-5 text-gold mb-2" />
-                      <p className="text-sm font-medium text-navy dark:text-white">
+                    <div className="p-3 sm:p-4 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <Crown className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-sm font-medium text-navy dark:text-white mb-1">
                         Upgrade Anytime
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -354,16 +753,15 @@ export function Dashboard() {
                     </div>
                   </div>
                   {viewCount >= viewLimit && (
-                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 sm:p-5 mb-4">
                       <div className="flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-medium text-orange-900 dark:text-orange-300 mb-1">
                             You've reached your free limit
                           </p>
                           <p className="text-sm text-orange-700 dark:text-orange-400">
-                            Upgrade to GOLD or PLATINUM to continue viewing
-                            properties and access owner contact details.
+                            Upgrade to GOLD or PLATINUM to continue viewing properties and access owner contact details.
                           </p>
                         </div>
                       </div>
@@ -372,19 +770,23 @@ export function Dashboard() {
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <Eye className="w-5 h-5 text-green-600 dark:text-green-400 mb-2" />
-                      <p className="text-sm font-medium text-navy dark:text-white">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-3 md:gap-4 mb-6">
+                    <div className="p-3 sm:p-4 md:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <Eye className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-sm font-medium text-navy dark:text-white mb-1">
                         Unlimited Views
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         Browse all properties
                       </p>
                     </div>
-                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <Users className="w-5 h-5 text-green-600 dark:text-green-400 mb-2" />
-                      <p className="text-sm font-medium text-navy dark:text-white">
+                    <div className="p-3 sm:p-4 md:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <Users className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-sm font-medium text-navy dark:text-white mb-1">
                         Full Contact Access
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -392,9 +794,11 @@ export function Dashboard() {
                       </p>
                     </div>
                     {plan === "PLATINUM" && (
-                      <div className="p-4 bg-gold/10 dark:bg-gold/20 rounded-lg">
-                        <Crown className="w-5 h-5 text-gold mb-2" />
-                        <p className="text-sm font-medium text-navy dark:text-white">
+                      <div className="p-3 sm:p-4 md:p-4 bg-gold/10 dark:bg-gold/20 rounded-xl">
+                        <div className="flex items-start gap-2 mb-2">
+                          <Crown className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+                        </div>
+                        <p className="text-sm font-medium text-navy dark:text-white mb-1">
                           Call Support
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -404,13 +808,10 @@ export function Dashboard() {
                     )}
                   </div>
                   {expiresAt && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 sm:p-5">
                       <div className="flex items-center gap-2 text-sm text-blue-900 dark:text-blue-300">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          Plan expires on{" "}
-                          {new Date(expiresAt).toLocaleDateString()}
-                        </span>
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        <span>Plan expires on {new Date(expiresAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   )}
@@ -420,27 +821,27 @@ export function Dashboard() {
           </div>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <Link
               to="/rooms"
-              className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md hover:scale-[1.02] transition-all duration-200 group"
+              className="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md hover:scale-[1.02] transition-all duration-200 group min-h-[140px] sm:min-h-[160px] flex flex-col justify-start"
             >
-              <Home className="w-8 h-8 text-navy dark:text-white mb-4 group-hover:text-gold transition-colors" />
-              <h3 className="text-xl font-bold text-navy dark:text-white mb-2">
+              <Home className="w-8 h-8 text-navy dark:text-white mb-3 group-hover:text-gold transition-colors" />
+              <h3 className="text-base sm:text-lg font-bold text-navy dark:text-white mb-2">
                 Browse Properties
               </h3>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Find your perfect rental home in {user.city || "your city"}
               </p>
             </Link>
 
             <Link
               to="/pricing"
-              className="bg-gradient-to-br from-navy to-navy-light p-6 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 group text-white"
+              className="bg-gradient-to-br from-navy to-navy-light p-5 sm:p-6 rounded-2xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 group text-white min-h-[140px] sm:min-h-[160px] flex flex-col justify-start"
             >
-              <Crown className="w-8 h-8 text-gold mb-4" />
-              <h3 className="text-xl font-bold mb-2">View Plans</h3>
-              <p className="text-white/80">
+              <Crown className="w-8 h-8 text-gold mb-3" />
+              <h3 className="text-base sm:text-lg font-bold mb-2">View Plans</h3>
+              <p className="text-white/80 text-sm leading-relaxed">
                 Upgrade for unlimited access and premium features
               </p>
             </Link>
@@ -584,7 +985,7 @@ export function Dashboard() {
     (r) => r.reviewStatus?.toUpperCase() === "NEEDS_CORRECTION",
   ).length;
   return (
-    <div className="min-h-screen bg-cream dark:bg-slate-950 pt-20 transition-colors duration-300 overflow-y-auto">
+    <div className="min-h-full bg-cream dark:bg-slate-950 transition-colors duration-300">
       <AddPropertyModal
         isOpen={isAddModalOpen}
         onClose={() => {
@@ -802,7 +1203,7 @@ export function Dashboard() {
       )}
 
       {/* <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-1"> */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-6 md:pt-6 md:pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-6  md:pb-8">
         {/* <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"> */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3">
           <div>
@@ -814,14 +1215,141 @@ export function Dashboard() {
             <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-sm sm:text-base">
               Manage your properties and bookings
             </p>
+            {isLiveActivity && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                🟢 Live activity happening now
+              </div>
+            )}
           </div>
-          <button
-            onClick={openAddPropertyFlow}
-            className="flex items-center gap-2 px-6 py-3 bg-navy dark:bg-slate-200 text-white dark:text-navy rounded-xl hover:bg-gold dark:hover:bg-white transition-all duration-200 font-semibold shadow-lg shadow-navy/20 dark:shadow-black/20 w-full md:w-auto justify-center"
-          >
-            <Plus className="w-5 h-5" /> Add New Property
-          </button>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative" ref={notificationBellRef}>
+              <button
+                onClick={() => setIsNotificationsOpen((current) => !current)}
+                className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm hover:shadow-md transition-all duration-200"
+                aria-label="Open notifications"
+              >
+                <Bell
+                  className={`w-5 h-5 ${
+                    unreadNotificationCount > 0 ? "animate-pulse" : ""
+                  }`}
+                />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-3 w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl z-30 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-navy dark:text-white text-sm">
+                          Notifications
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Latest owner activity on your properties
+                        </p>
+                      </div>
+                      {unreadNotificationCount > 0 && (
+                        <span className="text-xs font-semibold text-rose-600 dark:text-rose-300">
+                          {unreadNotificationCount} unread
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto">
+                    {isNotificationsLoading ? (
+                      <div className="p-4 space-y-3">
+                        {[1, 2, 3].map((item) => (
+                          <div
+                            key={item}
+                            className="h-14 rounded-xl bg-slate-100 dark:bg-slate-700 animate-pulse"
+                          />
+                        ))}
+                      </div>
+                    ) : groupedNotifications.length > 0 ? (
+                      groupedNotifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-700/70 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-all duration-500 ${
+                            notification.isRead ? "" : "bg-amber-50/50 dark:bg-amber-500/5"
+                          } ${
+                            notification.sourceIds.some((id) =>
+                              newNotificationIds.includes(id),
+                            )
+                              ? "ring-1 ring-emerald-200 dark:ring-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/10 animate-pulse"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-base leading-none mt-0.5">
+                              {getNotificationLead(notification)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start gap-2">
+                                {!notification.isRead && (
+                                  <span className="mt-1.5 h-2 w-2 rounded-full bg-rose-500 flex-shrink-0" />
+                                )}
+                                <p
+                                  className={`text-sm text-slate-800 dark:text-slate-100 ${
+                                    notification.isRead
+                                      ? "font-medium"
+                                      : "font-semibold"
+                                  }`}
+                                >
+                                  {notification.eventType
+                                    ? getActivityCopy({
+                                        type: notification.eventType as OwnerActivityItem["type"],
+                                        count: notification.count,
+                                      })
+                                    : notification.message}
+                                </p>
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                {formatActivityTime(notification.createdAt, nowMs)}
+                              </p>
+                              {notification.propertyTitle && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                                  {notification.propertyTitle}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-6 text-center">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          No activity yet — your property is live and waiting.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={openAddPropertyFlow}
+              className="flex items-center gap-2 px-6 py-3 bg-navy dark:bg-slate-200 text-white dark:text-navy rounded-xl hover:bg-gold dark:hover:bg-white transition-all duration-200 font-semibold shadow-lg shadow-navy/20 dark:shadow-black/20 flex-1 md:flex-none justify-center"
+            >
+              <Plus className="w-5 h-5" /> Add New Property
+            </button>
+          </div>
         </div>
+
+        {hasActivityToday && (
+          <div className="mb-5 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+            <p className="text-sm sm:text-base font-semibold text-amber-800 dark:text-amber-300">
+              🔥 Your property is getting attention today
+            </p>
+          </div>
+        )}
 
         {needsCorrectionCount > 0 && (
           <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 border-l-4 border-l-orange-500 p-5 rounded-xl mb-8">
@@ -977,35 +1505,97 @@ export function Dashboard() {
 
         {/* Tabs */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-          <div className="border-b border-slate-100 dark:border-slate-700 flex p-1.5 gap-1.5 bg-slate-50 dark:bg-slate-900/50">
+          <div className="border-b border-slate-100 dark:border-slate-700 flex p-1 sm:p-1.5 gap-1 sm:gap-1.5 bg-slate-50 dark:bg-slate-900/50">
             <button
               onClick={() => setActiveTab("properties")}
-              className={`flex-1 px-4 py-2.5 font-semibold text-sm rounded-xl transition-all duration-200 relative ${
+              className={`flex-1 px-3 sm:px-4 py-3 sm:py-3 font-semibold text-xs sm:text-sm rounded-xl transition-all duration-200 relative min-h-[44px] flex items-center justify-center ${
                 activeTab === "properties"
                   ? "bg-white dark:bg-slate-800 text-navy dark:text-white shadow-sm"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               }`}
             >
-              My Properties ({myRooms.length})
+              <span className="truncate">My Properties ({myRooms.length})</span>
               {needsCorrectionCount > 0 && (
-                <span className="absolute top-1.5 right-2 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
               )}
             </button>
             <button
               onClick={() => setActiveTab("bookings")}
-              className={`flex-1 px-4 py-2.5 font-semibold text-sm rounded-xl transition-all duration-200 ${
+              className={`flex-1 px-3 sm:px-4 py-3 sm:py-3 font-semibold text-xs sm:text-sm rounded-xl transition-all duration-200 min-h-[44px] flex items-center justify-center ${
                 activeTab === "bookings"
                   ? "bg-white dark:bg-slate-800 text-navy dark:text-white shadow-sm"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               }`}
             >
-              Booking Requests ({myBookings.length})
+              <span className="truncate">Bookings ({myBookings.length})</span>
             </button>
           </div>
 
           {activeTab === "properties" ? (
-            myRooms.length > 0 ? (
+            loading.rooms ? (
               <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="p-4 sm:p-5 min-h-[80px] sm:min-h-[100px]">
+                    <ListItemSkeleton />
+                  </div>
+                ))}
+              </div>
+            ) : myRooms.length > 0 ? (
+              <div>
+                <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/70 dark:bg-slate-900/30">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-navy dark:text-white text-sm sm:text-base">
+                        Recent Activity
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        See who is showing interest in your listings.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {isActivityLoading ? (
+                      [1, 2].map((item) => (
+                        <div
+                          key={item}
+                          className="h-12 rounded-xl bg-white dark:bg-slate-800 animate-pulse"
+                        />
+                      ))
+                    ) : groupedActivity.length > 0 ? (
+                      groupedActivity.slice(0, 5).map((activity) => (
+                        <div
+                          key={activity.id}
+                          className={`rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-4 py-3 transition-all duration-500 ${
+                            activity.sourceIds.some((id) =>
+                              newActivityIds.includes(id),
+                            )
+                              ? "ring-1 ring-emerald-200 dark:ring-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/10 animate-pulse"
+                              : ""
+                          }`}
+                        >
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {getActivityCopy(activity)}{" "}
+                            <span className="text-slate-500 dark:text-slate-400 font-normal">
+                              {formatActivityTime(activity.createdAt, nowMs)}
+                            </span>
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            {activity.propertyTitle}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-3">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          No activity yet — your property is live and waiting.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
                 {myRooms.map((room) => {
                   const needsCorrection =
                     room.reviewStatus?.toUpperCase() === "NEEDS_CORRECTION";
@@ -1018,7 +1608,7 @@ export function Dashboard() {
                           : ""
                       }
                     >
-                      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5 hover:bg-slate-50/80 dark:hover:bg-slate-700/20 transition-colors">
+                      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-slate-50/80 dark:hover:bg-slate-700/20 transition-colors">
                         {/* Image & Title */}
                         <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="relative flex-shrink-0">
@@ -1029,7 +1619,7 @@ export function Dashboard() {
                               }
                               alt=""
                               loading="lazy"
-                              className="w-14 h-14 rounded-xl object-cover ring-2 ring-slate-100 dark:ring-slate-700"
+                              className="w-16 h-16 sm:w-14 sm:h-14 rounded-2xl object-cover ring-2 ring-slate-100 dark:ring-slate-700"
                             />
 
                             {needsCorrection && (
@@ -1045,11 +1635,18 @@ export function Dashboard() {
                             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                               {room.roomType} · {room.location}
                             </p>
+                            {room.demand && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                👀 {Math.max(1, room.demand.weeklyViews || 0)} views
+                                {" • "}
+                                🔥 {Math.max(1, room.demand.weeklyContacts || 0)} contacts
+                              </p>
+                            )}
                           </div>
                         </div>
 
                         {/* Price & Status (Mobile/Desktop) */}
-                        <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6 w-full sm:w-auto">
                           <div className="font-semibold text-navy dark:text-white text-sm">
                             ₹{room.pricePerMonth.toLocaleString()}
                             <span className="text-xs font-normal text-slate-400">
@@ -1060,14 +1657,14 @@ export function Dashboard() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-start sm:justify-end">
                           {needsCorrection ? (
                             <button
                               onClick={() => setViewingFeedback(room)}
-                              className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm shadow-orange-200 dark:shadow-orange-900/30"
+                              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 sm:py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs sm:text-sm font-semibold transition-colors shadow-sm shadow-orange-200 dark:shadow-orange-900/30 min-h-[40px] sm:min-h-[36px]"
                             >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                              View Feedback
+                              <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="hidden sm:inline">Feedback</span>
                             </button>
                           ) : (
                             <>
@@ -1109,6 +1706,7 @@ export function Dashboard() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             ) : (
               <div className="p-16 text-center">
@@ -1130,8 +1728,14 @@ export function Dashboard() {
                 </button>
               </div>
             )
+          ) : loading.bookings ? (
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4 bg-slate-50/50 dark:bg-slate-900/20 min-h-[400px]">
+              {[1, 2, 3].map((i) => (
+                <ListItemSkeleton key={i} />
+              ))}
+            </div>
           ) : myBookings.length > 0 ? (
-            <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50 dark:bg-slate-900/20 min-h-[400px]">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4 bg-slate-50/50 dark:bg-slate-900/20 min-h-[400px]">
               {myBookings.map((booking) => {
                 const room = myRooms.find((r) => r.id === booking.roomId);
                 return (

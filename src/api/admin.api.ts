@@ -149,5 +149,61 @@ export const adminApi = {
     assertValidParam(tenantId, 'tenantId');
     const response = await axiosInstance.delete<ApiResponse<any>>(`/admin/agents/${agentId}/tenants/${tenantId}`);
     return response.data;
+  },
+
+  // ==========================================================================
+  // CONTACT & ENGAGEMENT TRACKING (PROMPTS 1, 2, 3)
+  // ==========================================================================
+
+  // Track contact attempt - async, non-blocking
+  trackContactAttempt: async (propertyIds: string[]): Promise<{ count: number; timestamp: string }> => {
+    if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+      throw new Error('propertyIds must be a non-empty array');
+    }
+    try {
+      const response = await axiosInstance.post<ApiResponse<{ count: number; timestamp: string }>>(
+        '/admin/properties/track-contact',
+        { propertyIds }
+      );
+      return response.data.data;
+    } catch (error) {
+      // Log but don't throw - tracking failure shouldn't break WhatsApp flow
+      console.warn('Contact tracking failed:', error);
+      return { count: 0, timestamp: new Date().toISOString() };
+    }
+  },
+
+  // Track owner login (PROMPT 2)
+  trackOwnerLogin: async (userId: string): Promise<{ userId: string; lastLoginAt: string }> => {
+    if (!userId) {
+      throw new Error('userId is required');
+    }
+    try {
+      const response = await axiosInstance.post<ApiResponse<{ userId: string; lastLoginAt: string }>>(
+        '/admin/engagement/track-login',
+        { userId }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.warn('Login tracking failed:', error);
+      return { userId, lastLoginAt: new Date().toISOString() };
+    }
+  },
+
+  // Track property update (PROMPT 2)
+  trackPropertyUpdate: async (propertyId: string): Promise<{ propertyId: string; ownerId: string; lastPropertyUpdateAt: string }> => {
+    if (!propertyId) {
+      throw new Error('propertyId is required');
+    }
+    try {
+      const response = await axiosInstance.post<ApiResponse<{ propertyId: string; ownerId: string; lastPropertyUpdateAt: string }>>(
+        '/admin/engagement/track-property-update',
+        { propertyId }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.warn('Property update tracking failed:', error);
+      return { propertyId, ownerId: '', lastPropertyUpdateAt: new Date().toISOString() };
+    }
   }
 };

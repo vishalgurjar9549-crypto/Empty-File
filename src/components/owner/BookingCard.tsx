@@ -18,7 +18,7 @@ export function BookingCard({
   const isApproved = booking.status === 'approved';
   const isRejected = booking.status === 'rejected';
   return <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
-      <div className="p-6 flex flex-col md:flex-row gap-6">
+      <div className="p-4 sm:p-6 flex flex-col md:flex-row gap-4 sm:gap-6">
         {/* Left: Tenant & Property Info */}
         <div className="flex-1 min-w-0 space-y-4">
           {/* Header: Tenant Name & Verified Badge */}
@@ -40,7 +40,7 @@ export function BookingCard({
           </div>
 
           {/* Contact Details */}
-          <div className="flex flex-wrap gap-y-2 gap-x-6 text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex flex-wrap gap-y-2 sm:gap-y-3 gap-x-4 sm:gap-x-6 text-sm text-slate-600 dark:text-slate-400">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-slate-400" />
               {booking.tenantEmail}
@@ -96,7 +96,7 @@ export function BookingCard({
         </div>
 
         {/* Right: Status & Actions */}
-        <div className="flex flex-col justify-between items-end gap-6 min-w-[200px] border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-700 pt-6 md:pt-0 md:pl-6">
+        <div className="flex flex-col justify-between items-end gap-4 sm:gap-6 min-w-[200px] border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-700 pt-4 sm:pt-6 md:pt-0 md:pl-6">
           {/* Desktop Status Badge */}
           <div className="hidden md:block">
             <StatusBadge status={booking.status} />

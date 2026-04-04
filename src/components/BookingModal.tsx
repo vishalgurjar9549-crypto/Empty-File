@@ -1,370 +1,705 @@
-import React, { useEffect, useState, lazy } from 'react';
-import { X, Calendar, User, Phone, CheckCircle, Mail, LogIn } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  X,
+  Calendar,
+  User,
+  Phone,
+  CheckCircle,
+  Mail,
+  LogIn,
+  AlertCircle,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { createBooking } from '../store/slices/bookings.slice';
 import { generateIdempotencyKey } from '../api/bookings.api';
 import { Room } from '../types/api.types';
 import { Button } from './ui/Button';
+
+
 interface BookingModalProps {
   room: Room;
   isOpen: boolean;
   onClose: () => void;
 }
-export function BookingModal({
-  room,
-  isOpen,
-  onClose
-}: BookingModalProps) {
+
+type BookingStep = 'form' | 'success';
+
+type FormDataState = {
+  name: string;
+  email: string;
+  phone: string;
+  date: string;
+  message: string;
+};
+
+type FormErrors = Partial<Record<keyof FormDataState, string>>;
+
+const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
+
+const getTodayLocalDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const sanitizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 10);
+
+export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const {
-    loading
-  } = useAppSelector((state) => state.bookings);
-  const {
-    user,
-    authStatus
-  } = useAppSelector((state) => state.auth);
-  const [step, setStep] = useState<'form' | 'success'>('form');
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    date: '',
-    message: ''
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const { loading } = useAppSelector((state) => state.bookings);
+  const { user, authStatus } = useAppSelector((state) => state.auth);
+
+  const [step, setStep] = useState<BookingStep>('form');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(generateIdempotencyKey());
 
-  // useEffect(() => {
-  //   if (isOpen) {
-  //     document.body.style.overflow = 'hidden';
-  //     setIdempotencyKey(generateIdempotencyKey());
-  //   } else {
-  //     document.body.style.overflow = '';
-  //   }
-  //   return () => {
-  //     document.body.style.overflow = '';
-  //   };
-  // }, [isOpen]);
+  const initialFormData = useMemo<FormDataState>(
+    () => ({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: sanitizePhone(user?.phone || ''),
+      date: '',
+      message: '',
+    }),
+    [user]
+  );
+
+  const [formData, setFormData] = useState<FormDataState>(initialFormData);
+  const [errors, setErrors] = useState<FormErrors>({});
+
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const roomImage = room?.images?.[0] || '/placeholder-room.jpg';
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // store original value
     const originalOverflow = document.body.style.overflow;
-
-    // lock scroll
     document.body.style.overflow = 'hidden';
-
-    // your existing logic
     setIdempotencyKey(generateIdempotencyKey());
+
     return () => {
-      // restore original value safely
-      document.body.style.overflow = originalOverflow || 'auto';
+      document.body.style.overflow = originalOverflow || '';
     };
   }, [isOpen]);
+
   useEffect(() => {
     if (authStatus === 'AUTHENTICATED' && user) {
       setFormData((prev) => ({
         ...prev,
         name: user.name || prev.name,
         email: user.email || prev.email,
-        phone: user.phone || prev.phone
+        phone: sanitizePhone(user.phone || prev.phone),
       }));
     }
   }, [authStatus, user]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = window.setTimeout(() => {
+      if (step === 'form') {
+        firstInputRef.current?.focus();
+      } else {
+        closeButtonRef.current?.focus();
+      }
+    }, 50);
+
+    return () => window.clearTimeout(timer);
+  }, [isOpen, step]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])'
+        );
+
+        const visibleFocusable = Array.from(focusable).filter(
+          (el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden')
+        );
+
+        if (visibleFocusable.length === 0) return;
+
+        const first = visibleFocusable[0];
+        const last = visibleFocusable[visibleFocusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep('form');
+      setErrors({});
+      setFormData(initialFormData);
+    }
+  }, [isOpen, initialFormData]);
+
+  const updateField = <K extends keyof FormDataState>(field: K, value: FormDataState[K]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const validate = () => {
+    const newErrors: FormErrors = {};
+
+    const trimmedName = formData.name.trim();
+    const trimmedEmail = formData.email.trim();
+    const cleanedPhone = sanitizePhone(formData.phone);
+
+    if (!trimmedName) {
+      newErrors.name = 'Full name is required';
+    } else if (trimmedName.length < 3) {
+      newErrors.name = 'Name must be at least 3 characters';
+    }
+
+    if (!trimmedEmail) {
+      newErrors.email = 'Email is required';
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+      newErrors.email = 'Enter a valid email address';
+    }
+
+    if (!cleanedPhone) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!INDIAN_MOBILE_REGEX.test(cleanedPhone)) {
+      newErrors.phone = 'Enter a valid 10-digit Indian mobile number';
+    }
+
+    if (!formData.date) {
+      newErrors.date = 'Preferred move-in date is required';
+    } else {
+      const selected = new Date(`${formData.date}T00:00:00`);
+      const today = new Date(`${getTodayLocalDate()}T00:00:00`);
+
+      if (selected < today) {
+        newErrors.date = 'Date cannot be in the past';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    if (loading) return;
+    if (!validate()) return;
+
+    const bookingData = {
+      roomId: room.id,
+      tenantName: formData.name.trim(),
+      tenantEmail: formData.email.trim(),
+      tenantPhone: sanitizePhone(formData.phone),
+      moveInDate: formData.date,
+      message: formData.message.trim(),
+      idempotencyKey,
+    };
+
+    const action = await dispatch(createBooking(bookingData));
+
+    if (createBooking.fulfilled.match(action)) {
+      setIdempotencyKey(generateIdempotencyKey());
+      setStep('success');
+    }
+  };
+
+  const resetState = () => {
+    setStep('form');
+    setErrors({});
+    setFormData({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: sanitizePhone(user?.phone || ''),
+      date: '',
+      message: '',
+    });
+  };
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+  };
+
   if (!isOpen) return null;
+
   if (authStatus === 'INITIALIZING') {
-    return <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    return (
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-loading-title"
+      >
         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-        <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-700 border-t-navy dark:border-t-white mx-auto mb-4"></div>
+        <div className="relative w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl dark:bg-slate-800">
+          <h2 id="booking-loading-title" className="sr-only">
+            Checking authentication
+          </h2>
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-navy dark:border-slate-700 dark:border-t-white" />
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Verifying your session…
           </p>
         </div>
-      </div>;
+      </div>
+    );
   }
+
   if (authStatus === 'UNAUTHENTICATED') {
-    return <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="auth-required-title">
+    return (
+      <div
+        className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-required-title"
+        aria-describedby="auth-required-description"
+      >
         <div className="absolute inset-0 bg-navy/60 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full sm:max-w-md bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in duration-300">
-          {/* Safe-area aware padding bottom on mobile */}
-          <div className="p-6 sm:p-8" style={{
-          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))'
-        }}>
+        <div
+          ref={dialogRef}
+          className="relative w-full overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 sm:max-w-md sm:rounded-2xl sm:zoom-in dark:bg-slate-800"
+        >
+          <div
+            className="p-6 sm:p-8"
+            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+          >
             <div className="text-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gold/10 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-5">
-                <LogIn className="w-7 h-7 sm:w-8 sm:h-8 text-gold dark:text-white" />
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-gold/10 dark:bg-white/10 sm:h-16 sm:w-16">
+                <LogIn className="h-7 w-7 text-gold dark:text-white sm:h-8 sm:w-8" />
               </div>
 
-              <h3 id="auth-required-title" className="text-xl sm:text-2xl font-playfair font-bold text-navy dark:text-white mb-3">
+              <h3
+                id="auth-required-title"
+                className="mb-3 text-xl font-playfair font-bold text-navy dark:text-white sm:text-2xl"
+              >
                 Sign In Required
               </h3>
 
-              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-7">
-                Please sign in to book a visit for this property. It only takes a minute!
+              <p
+                id="auth-required-description"
+                className="mb-7 text-sm text-slate-600 dark:text-slate-300 sm:text-base"
+              >
+                Please sign in to book a visit for this property. It only takes a minute.
               </p>
 
               <div className="space-y-3">
-                <Button variant="primary" size="lg" fullWidth onClick={() => {
-                onClose();
-                navigate('/auth/login', {
-                  state: {
-                    from: `/rooms/${room.id}`
-                  }
-                });
-              }}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onClick={() => {
+                    onClose();
+                    navigate('/auth/login', {
+                      state: { from: `/rooms/${room.id}` },
+                    });
+                  }}
+                >
                   Sign In to Continue
                 </Button>
+
                 <Button variant="outline" size="md" fullWidth onClick={onClose}>
                   Cancel
                 </Button>
               </div>
 
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-5">
-                Don't have an account?{' '}
-                <button onClick={() => {
-                onClose();
-                navigate('/auth/register');
-              }} className="text-gold font-medium hover:underline">
+              <p className="mt-5 text-sm text-slate-500 dark:text-slate-400">
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate('/auth/register');
+                  }}
+                  className="font-medium text-gold hover:underline"
+                >
                   Sign up here
                 </button>
               </p>
             </div>
           </div>
         </div>
-      </div>;
+      </div>
+    );
   }
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.name.trim()) {
-      newErrors.name = 'Full name is required';
-    } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
-      newErrors.email = 'Enter a valid email address';
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else {
-      const cleaned = formData.phone.replace(/\D/g, '');
-      if (cleaned.length !== 10) {
-        newErrors.phone = 'Phone number must be exactly 10 digits';
-      } else if (!/^[6-9]\d{9}$/.test(cleaned)) {
-        newErrors.phone = 'Enter a valid Indian mobile number';
-      }
-    }
-    if (!formData.date) {
-      newErrors.date = 'property visit date is required';
-    } else {
-      const selected = new Date(formData.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selected < today) {
-        newErrors.date = 'Date cannot be in the past';
-      }
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-    const bookingData = {
-      roomId: room.id,
-      tenantName: formData.name,
-      tenantEmail: formData.email,
-      tenantPhone: formData.phone,
-      moveInDate: formData.date,
-      message: formData.message,
-      idempotencyKey
-    };
-    dispatch(createBooking(bookingData)).then((action) => {
-      if (createBooking.fulfilled.match(action)) {
-        setIdempotencyKey(generateIdempotencyKey());
-        setStep('success');
-      }
-    });
-  };
-  const handleClose = () => {
-    setStep('form');
-    setFormData({
-      name: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      date: '',
-      message: ''
-    });
-    setErrors({});
-    onClose();
-  };
-  return <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="booking-modal-title"
+      aria-describedby="booking-modal-description"
+    >
       <div className="absolute inset-0 bg-navy/50 backdrop-blur-sm" onClick={handleClose} />
 
-      {/*
-      Key mobile fixes:
-      - Removed p-3 on the outer wrapper (was causing left/right gaps that could cause overflow)
-      - w-full on mobile ensures full-width flush sheet
-      - max-h uses dvh (dynamic viewport height) with fallback for better mobile browser support
-      - sm:mx-4 adds side margin only on sm+ so the card doesn't touch screen edges on small phones
-      */}
-      <div className="relative w-full sm:mx-4 sm:max-w-lg max-h-[92dvh] max-h-[92vh] bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 sm:zoom-in duration-300">
-        {step === 'form' ? <>
+      <div
+        ref={dialogRef}
+        className="relative flex max-h-[92vh] max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 sm:mx-4 sm:max-w-lg sm:rounded-2xl sm:zoom-in dark:bg-slate-800"
+      >
+        {step === 'form' ? (
+          <>
             {/* Header */}
-            <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-700 sm:px-6 sm:py-4">
               <div>
-                <h3 id="booking-modal-title" className="text-lg sm:text-xl font-playfair font-bold text-navy dark:text-white">
+                <h3
+                  id="booking-modal-title"
+                  className="text-lg font-playfair font-bold text-navy dark:text-white sm:text-xl"
+                >
                   Book Your Visit
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p
+                  id="booking-modal-description"
+                  className="text-xs text-slate-500 dark:text-slate-400"
+                >
                   Schedule a visit in 30 seconds
                 </p>
               </div>
-              <button onClick={handleClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
-                <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+
+              <button
+                ref={closeButtonRef}
+                type="button"
+                onClick={handleClose}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Close booking modal"
+              >
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
               </button>
             </div>
 
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 min-h-0">
-              {/* Room Summary Card */}
-              <div className="mb-5 p-3 sm:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-700 flex gap-3">
-                <img src={room.images[0]} alt={room.title} className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0" loading="lazy" />
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-navy dark:text-white truncate text-sm">
+            {/* Body */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+              <div className="mb-5 flex gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/50 sm:p-4">
+                <img
+                  src={roomImage}
+                  alt={room.title}
+                  className="h-14 w-14 flex-shrink-0 rounded-lg object-cover sm:h-16 sm:w-16"
+                  loading="lazy"
+                />
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-bold text-navy dark:text-white">
                     {room.title}
                   </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                     {room.location}
                   </p>
-                  <p className="text-gold font-bold mt-1 text-sm">
+                  <p className="mt-1 text-sm font-bold text-gold">
                     ₹{room.pricePerMonth.toLocaleString()}/mo
                   </p>
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/*
-              On mobile, stack the name/phone grid to single column.
-              grid-cols-1 by default, md:grid-cols-2 only kicks in at 768px+.
-              Most phones are <768px so they'll see stacked fields — no overflow.
-              */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Name */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                      Full Name *
+                    <label
+                      htmlFor="booking-name"
+                      className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      Full Name
+                      <span className="text-red-600 dark:text-red-400" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(Required)</span>
                     </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <input type="text" value={formData.name} onChange={(e) => setFormData({
-                    ...formData,
-                    name: e.target.value
-                  })} className={`w-full h-11 pl-9 pr-3 text-sm bg-white dark:bg-slate-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all dark:text-white ${errors.name ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-600'}`} placeholder="John Doe" />
+
+                    <div
+                      className={`relative flex w-full overflow-hidden rounded-lg border bg-white transition-all focus-within:ring-2 dark:bg-slate-700 ${
+                        errors.name
+                          ? 'border-red-400 focus-within:ring-red-400/50 dark:border-red-700'
+                          : 'border-slate-200 focus-within:ring-gold/40 dark:border-slate-600'
+                      }`}
+                    >
+                      <User className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        ref={firstInputRef}
+                        id="booking-name"
+                        name="name"
+                        type="text"
+                        autoComplete="name"
+                        value={formData.name}
+                        onChange={(e) => updateField('name', e.target.value)}
+                        aria-invalid={!!errors.name}
+                        aria-describedby={errors.name ? 'booking-name-error' : undefined}
+                        placeholder="John Doe"
+                        className="h-11 w-full bg-transparent pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+                      />
                     </div>
-                    {errors.name && <p className="text-red-500 dark:text-red-400 text-xs mt-1">
-                        {errors.name}
-                      </p>}
+
+                    {errors.name && (
+                      <div
+                        id="booking-name-error"
+                        role="alert"
+                        className="mt-2 flex items-start gap-2"
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+                        <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                          {errors.name}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Phone */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                      Phone Number *
+                    <label
+                      htmlFor="booking-phone"
+                      className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      Phone Number
+                      <span className="text-red-600 dark:text-red-400" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only">(Required)</span>
                     </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <input type="tel" value={formData.phone} onChange={(e) => {
-                    const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setFormData({
-                      ...formData,
-                      phone: onlyDigits
-                    });
-                  }} inputMode="numeric" className={`w-full h-11 pl-9 pr-3 text-sm bg-white dark:bg-slate-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all dark:text-white ${errors.phone ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-600'}`} placeholder="9876543210" />
+
+                    <div
+                      className={`relative flex w-full overflow-hidden rounded-lg border bg-white transition-all focus-within:ring-2 dark:bg-slate-700 ${
+                        errors.phone
+                          ? 'border-red-400 focus-within:ring-red-400/50 dark:border-red-700'
+                          : 'border-slate-200 focus-within:ring-gold/40 dark:border-slate-600'
+                      }`}
+                    >
+                      <Phone className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        id="booking-phone"
+                        name="phone"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        value={formData.phone}
+                        onChange={(e) => updateField('phone', sanitizePhone(e.target.value))}
+                        aria-invalid={!!errors.phone}
+                        aria-describedby={errors.phone ? 'booking-phone-error' : undefined}
+                        placeholder="9876543210"
+                        className="h-11 w-full bg-transparent pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+                      />
                     </div>
-                    {errors.phone && <p className="text-red-500 dark:text-red-400 text-xs mt-1">
-                        {errors.phone}
-                      </p>}
+
+                    {errors.phone && (
+                      <div
+                        id="booking-phone-error"
+                        role="alert"
+                        className="mt-2 flex items-start gap-2"
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+                        <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                          {errors.phone}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
+                {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Email Address *
+                  <label
+                    htmlFor="booking-email"
+                    className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
+                    Email Address
+                    <span className="text-red-600 dark:text-red-400" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only">(Required)</span>
                   </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input type="email" value={formData.email} onChange={(e) => setFormData({
-                  ...formData,
-                  email: e.target.value
-                })} className={`w-full h-11 pl-9 pr-3 text-sm bg-white dark:bg-slate-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all dark:text-white ${errors.email ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-600'}`} placeholder="john@example.com" disabled />
+
+                  <div
+                    className={`relative flex w-full overflow-hidden rounded-lg border bg-white transition-all focus-within:ring-2 dark:bg-slate-700 ${
+                      errors.email
+                        ? 'border-red-400 focus-within:ring-red-400/50 dark:border-red-700'
+                        : 'border-slate-200 focus-within:ring-gold/40 dark:border-slate-600'
+                    }`}
+                  >
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="booking-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      value={formData.email}
+                      onChange={(e) => updateField('email', e.target.value)}
+                      aria-invalid={!!errors.email}
+                      aria-describedby={errors.email ? 'booking-email-error' : undefined}
+                      placeholder="john@example.com"
+                      className="h-11 w-full bg-transparent pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+                    />
                   </div>
-                  {errors.email && <p className="text-red-500 dark:text-red-400 text-xs mt-1">
-                      {errors.email}
-                    </p>}
+
+                  {errors.email && (
+                    <div
+                      id="booking-email-error"
+                      role="alert"
+                      className="mt-2 flex items-start gap-2"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+                      <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                        {errors.email}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
+                {/* Date */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Preferred Visit Date *
+                  <label
+                    htmlFor="booking-date"
+                    className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
+                   Preferred Visit Date *
+                    <span className="text-red-600 dark:text-red-400" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only">(Required)</span>
                   </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input type="date" value={formData.date} onChange={(e) => setFormData({
-                  ...formData,
-                  date: e.target.value
-                })} min={new Date().toISOString().split('T')[0]} className={`w-full h-11 pl-9 pr-3 text-sm bg-white dark:bg-slate-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all dark:text-white ${errors.date ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-600'}`} />
+
+                  <div
+                    className={`relative flex w-full overflow-hidden rounded-lg border bg-white transition-all focus-within:ring-2 dark:bg-slate-700 ${
+                      errors.date
+                        ? 'border-red-400 focus-within:ring-red-400/50 dark:border-red-700'
+                        : 'border-slate-200 focus-within:ring-gold/40 dark:border-slate-600'
+                    }`}
+                  >
+                    <Calendar className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="booking-date"
+                      name="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => updateField('date', e.target.value)}
+                      min={getTodayLocalDate()}
+                      aria-invalid={!!errors.date}
+                      aria-describedby={errors.date ? 'booking-date-error' : undefined}
+                      className="h-11 w-full bg-transparent pl-9 pr-3 text-sm text-slate-900 outline-none dark:text-white"
+                    />
                   </div>
-                  {errors.date && <p className="text-red-500 dark:text-red-400 text-xs mt-1">
-                      {errors.date}
-                    </p>}
+
+                  {errors.date && (
+                    <div
+                      id="booking-date-error"
+                      role="alert"
+                      className="mt-2 flex items-start gap-2"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+                      <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                        {errors.date}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
+                {/* Message */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Message (Optional)
+                  <label
+                    htmlFor="booking-message"
+                    className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
+                    Message
+                    <span className="font-normal text-slate-500 dark:text-slate-400">
+                      (Optional)
+                    </span>
                   </label>
-                  <textarea value={formData.message} onChange={(e) => setFormData({
-                ...formData,
-                message: e.target.value
-              })} rows={3} className="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 transition-all resize-none dark:text-white" placeholder="Any specific requirements or questions..." />
+
+                  <textarea
+                    id="booking-message"
+                    name="message"
+                    value={formData.message}
+                    onChange={(e) => updateField('message', e.target.value)}
+                    rows={3}
+                    aria-describedby="booking-message-help"
+                    placeholder="Any specific requirements or questions..."
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-gold/40 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  />
+                  <p
+                    id="booking-message-help"
+                    className="mt-1.5 text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    Let the owner know about any preferences or specific requirements.
+                  </p>
                 </div>
               </form>
             </div>
 
-            {/* Sticky CTA footer — safe-area aware */}
-            <div className="flex-shrink-0 px-4 sm:px-6 pt-3 pb-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800" style={{
-          paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))'
-        }}>
-              <Button onClick={handleSubmit} variant="primary" size="lg" fullWidth loading={loading} className="min-h-[48px]">
+            {/* Footer */}
+            <div
+              className="flex-shrink-0 border-t border-slate-100 bg-white px-4 pb-3 pt-3 dark:border-slate-700 dark:bg-slate-800 sm:px-6"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+            >
+              <Button
+                type="button"
+                onClick={() => handleSubmit()}
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={loading}
+                className="min-h-[48px]"
+              >
                 Book Visit
               </Button>
             </div>
-          </> : <div className="p-8 sm:p-12 text-center flex flex-col items-center justify-center h-full min-h-[360px] sm:min-h-[400px]" style={{
-        paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))'
-      }}>
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mb-5 animate-in zoom-in duration-300">
-              <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10" />
+          </>
+        ) : (
+          <div
+            className="flex h-full min-h-[360px] flex-col items-center justify-center p-8 text-center sm:min-h-[400px] sm:p-12"
+            style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+          >
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600 animate-in zoom-in duration-300 dark:bg-green-900/30 dark:text-green-400 sm:h-20 sm:w-20">
+              <CheckCircle className="h-8 w-8 sm:h-10 sm:w-10" />
             </div>
-            <h3 className="text-xl sm:text-2xl font-playfair font-bold text-navy dark:text-white mb-3">
+
+            <h3 className="mb-3 text-xl font-playfair font-bold text-navy dark:text-white sm:text-2xl">
               Request Sent!
             </h3>
-            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-7 max-w-xs mx-auto">
-              The owner has been notified. You will receive a confirmation call
-              shortly on{' '}
-              <span className="font-semibold text-navy dark:text-white">
-                {formData.phone}
-              </span>
-              .
+
+            <p className="mx-auto mb-7 max-w-xs text-sm text-slate-600 dark:text-slate-300 sm:text-base">
+              The owner has been notified. You will receive a confirmation call shortly on{' '}
+              <span className="font-semibold text-navy dark:text-white">{formData.phone}</span>.
             </p>
-            <Button variant="primary" size="lg" onClick={handleClose} className="min-w-[180px] sm:min-w-[200px]">
+
+            <Button
+              ref={closeButtonRef as any}
+              variant="primary"
+              size="lg"
+              onClick={handleClose}
+              className="min-w-[180px] sm:min-w-[200px]"
+            >
               Close
             </Button>
-          </div>}
+          </div>
+        )}
       </div>
-    </div>;
+    </div>
+  );
 }

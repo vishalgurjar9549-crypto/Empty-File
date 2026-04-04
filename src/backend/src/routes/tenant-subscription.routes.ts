@@ -3,7 +3,7 @@ import { TenantSubscriptionController } from '../controllers/TenantSubscriptionC
 import { TenantSubscriptionService } from '../services/TenantSubscriptionService';
 import { PlanLimitService } from '../services/PlanLimitService';
 import { tenantSubscriptionRepository, propertyViewRepository, roomRepository } from '../repositories';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.middleware';
 const router = Router();
 
 // Initialize services with singleton repository instances
@@ -34,6 +34,9 @@ router.post('/verify-payment', authMiddleware, (req, res, next) => controller.ve
 
 // POST /track-view - Track property view (for FREE tier)
 router.post('/track-view', authMiddleware, (req, res, next) => controller.trackView(req as any, res, next));
+
+// POST /track-conversion - Track plan views and purchase intent
+router.post('/track-conversion', optionalAuthMiddleware, (req, res, next) => controller.trackConversionEvent(req as any, res));
 
 // GET /visibility?city=Jaipur&roomId=123 - Check access permissions
 router.get('/visibility', authMiddleware, (req, res, next) => controller.getVisibility(req as any, res, next));

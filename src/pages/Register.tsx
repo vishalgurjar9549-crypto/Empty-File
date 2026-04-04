@@ -1,215 +1,442 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAppDispatch } from '../store/hooks';
-import { setCredentials } from '../store/slices/auth.slice';
-import { authApi } from '../api/auth.api';
-import { Button } from '../components/ui/Button';
-import { Role } from '../types/api.types';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAppDispatch } from "../store/hooks";
+import { setCredentials } from "../store/slices/auth.slice";
+import { authApi } from "../api/auth.api";
+import { Button } from "../components/ui/Button";
+import { Role } from "../types/api.types";
+import { AuthLayout } from "../components/auth/AuthLayout";
+import { AuthErrorAlert } from "../components/auth/AuthErrorAlert";
+import { PasswordField } from "../components/auth/PasswordField";
+
+type FormData = {
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  city: string;
+  role: Role;
+};
+
+type FormErrors = {
+  name?: string;
+  email?: string;
+  password?: string;
+  phone?: string;
+  role?: string;
+  general?: string;
+};
+
 export function Register() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    city: '',
-    role: Role.TENANT
+
+  const [formData, setFormData] = useState<FormData>({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    city: "",
+    role: Role.TENANT,
   });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Check for phone_flow and read query params on mount
+  const errorSummaryRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    const phoneFromUrl = searchParams.get('phone');
-    const roleFromUrl = searchParams.get('role') as Role | null;
+    const phoneFromUrl = searchParams.get("phone");
+    const roleFromUrl = searchParams.get("role") as Role | null;
 
-    // Pre-fill form with URL parameters if they exist
     if (phoneFromUrl || roleFromUrl) {
       setFormData((prev) => ({
         ...prev,
         phone: phoneFromUrl || prev.phone,
-        role: roleFromUrl || prev.role
+        role: roleFromUrl || prev.role,
       }));
     }
   }, [location.search]);
 
+  useEffect(() => {
+    if (submitError || formErrors.general) {
+      errorSummaryRef.current?.focus();
+    }
+  }, [submitError, formErrors.general]);
+
+  const validateName = (value: string) => {
+    if (!value.trim()) return "Full name is required";
+    if (value.trim().length < 2) return "Name must be at least 2 characters";
+    return "";
+  };
+
+  const validateEmail = (value: string) => {
+    if (!value.trim()) return "Email is required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+      return "Please enter a valid email address";
+    }
+    return "";
+  };
+
+  const validatePassword = (value: string) => {
+    if (!value) return "Password is required";
+    if (value.length < 6) return "Password must be at least 6 characters";
+    return "";
+  };
+
+  const normalizePhone = (value: string) => {
+    // keep only digits and one leading +
+    let cleaned = value.replace(/[^\d+]/g, "");
+
+    // allow + only at the beginning
+    if (cleaned.includes("+")) {
+      cleaned = "+" + cleaned.replace(/\+/g, "").replace(/^\+/, "");
+    }
+
+    return cleaned;
+  };
+
+  const validatePhone = (value: string) => {
+    const phone = normalizePhone(value);
+
+    if (!phone) return "Phone number is required";
+
+    // Indian local: 10 digits starting from 6-9
+    const indianLocalRegex = /^[6-9]\d{9}$/;
+
+    // Indian international: +91XXXXXXXXXX or 91XXXXXXXXXX
+    const indianIntlRegex = /^(?:\+91|91)[6-9]\d{9}$/;
+
+    if (!indianLocalRegex.test(phone) && !indianIntlRegex.test(phone)) {
+      return "Enter a valid Indian phone number";
+    }
+
+    return "";
+  };
+
   const validate = () => {
-  const newErrors: Record<string, string> = {};
+    const newErrors: FormErrors = {};
 
-  if (!formData.name.trim()) newErrors.name = 'Name is required';
+    const nameError = validateName(formData.name);
+    const emailError = validateEmail(formData.email);
+    const passwordError = validatePassword(formData.password);
+    const phoneError = validatePhone(formData.phone);
 
-  if (!formData.email.trim()) newErrors.email = 'Email is required';
+    if (nameError) newErrors.name = nameError;
+    if (emailError) newErrors.email = emailError;
+    if (passwordError) newErrors.password = passwordError;
+    if (phoneError) newErrors.phone = phoneError;
+    if (!formData.role) newErrors.role = "Please select a role";
 
-  if (!formData.password || formData.password.length < 6) {
-    newErrors.password = 'Password must be at least 6 characters';
-  }
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-  // Phone validation (industry standard)
-  const phone = formData.phone.replace(/\s+/g, ""); // remove spaces
-  const phoneRegex = /^\+?[1-9]\d{9,14}$/; // E.164 format
+  const isFormValid = useMemo(() => {
+    return (
+      formData.name.trim().length > 0 &&
+      formData.email.trim().length > 0 &&
+      formData.password.trim().length > 0 &&
+      formData.phone.trim().length > 0 &&
+      !formErrors.name &&
+      !formErrors.email &&
+      !formErrors.password &&
+      !formErrors.phone
+    );
+  }, [formData, formErrors]);
 
-  if (!phone) {
-    newErrors.phone = "Phone number is required";
-  } else if (!phoneRegex.test(phone)) {
-    newErrors.phone =
-      "Enter a valid phone number (10–15 digits, optional country code)";
-  }
+  const updateField = (field: keyof FormData, value: string | Role) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
 
-  if (!formData.role) newErrors.role = "Please select a role";
+    setSubmitError(null);
 
-  setFormErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
+    setFormErrors((prev) => {
+      const next = { ...prev, general: undefined };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+      if (field === "name" && prev.name) {
+        next.name = validateName(String(value)) || undefined;
+      }
+
+      if (field === "email" && prev.email) {
+        next.email = validateEmail(String(value)) || undefined;
+      }
+
+      if (field === "password" && prev.password) {
+        next.password = validatePassword(String(value)) || undefined;
+      }
+
+      if (field === "phone" && prev.phone) {
+        next.phone = validatePhone(String(value)) || undefined;
+      }
+
+      if (field === "role" && prev.role) {
+        next.role = undefined;
+      }
+
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (isSubmitting) return;
     if (!validate()) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
+
     try {
-      // Call API directly to get user + token
-      const res = await authApi.register(formData);
-      
-      // Dispatch to Redux to update auth state
+      const normalizedPhone = normalizePhone(formData.phone.trim());
+
+      const payload = {
+        ...formData,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: normalizedPhone,
+      };
+
+      const res = await authApi.register(payload);
       dispatch(setCredentials(res));
-      
-      // Redirect to owner dashboard immediately
-      navigate('/owner/dashboard');
+
+      const userRole = res?.user?.role?.toUpperCase?.() || formData.role;
+
+      if (userRole === "OWNER") {
+        navigate("/owner/dashboard", { replace: true });
+      } else if (userRole === "AGENT") {
+        navigate("/agent/dashboard", { replace: true });
+      } else if (userRole === "TENANT") {
+        navigate("/rooms", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     } catch (err: any) {
-      // Set error message for display
-      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      const errorMessage =
+        err?.response?.data?.message ||
+        "Registration failed. Please try again.";
+
       setSubmitError(errorMessage);
       setIsSubmitting(false);
     }
   };
-  const inputClass = (field: string) => `w-full px-4 py-3 bg-white dark:bg-slate-700 border rounded-xl focus:ring-2 focus:ring-gold/50 outline-none transition-all dark:text-white dark:placeholder-slate-400 ${formErrors[field] ? 'border-red-300 dark:border-red-700 focus:border-red-400' : 'border-slate-200 dark:border-slate-600 focus:border-gold'}`;
-  return <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 sm:p-6 transition-colors duration-300 pt-20">
-      <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-navy/10 dark:shadow-black/30 p-6 sm:p-8 border border-slate-100 dark:border-slate-700">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block mb-4 group">
-            <div className="w-12 h-12 bg-navy dark:bg-slate-700 rounded-tr-xl rounded-bl-xl flex items-center justify-center mx-auto shadow-lg shadow-navy/20 transition-transform group-hover:scale-110 duration-300">
-              <span className="text-gold font-playfair font-bold text-2xl">
-                K
-              </span>
-            </div>
-          </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-navy dark:text-white font-playfair mb-2">
-            Create Account
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Join Homilivo today
-          </p>
-        </div>
 
-        {(submitError || formErrors.general) && <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm flex items-start gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+  const inputClass = (field: keyof FormErrors) =>
+    `w-full rounded-xl border bg-white dark:bg-slate-800 px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all ${
+      formErrors[field]
+        ? "border-red-400 dark:border-red-700 focus:ring-4 focus:ring-red-500/10"
+        : "border-slate-300 dark:border-slate-700 focus:border-gold focus:ring-4 focus:ring-gold/10"
+    }`;
 
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+  const generalError = submitError || formErrors.general;
 
-            </svg>
-            <span>{submitError || formErrors.general}</span>
-          </div>}
+  return (
+    <AuthLayout
+      badge="Secure sign up"
+      title="Create Account"
+      description="Join Homilivo and start your rental journey today."
+      heroBadge="Create your account and get started faster"
+      heroTitle="Join your rental workspace in minutes"
+      heroDescription="Discover rooms, manage listings, connect with verified users, and simplify your renting journey from day one."
+      heroPoints={[
+        {
+          title: "Search smarter",
+          description: "Save time with a smoother rental discovery experience.",
+        },
+        {
+          title: "List with confidence",
+          description:
+            "Owners can manage properties and reach the right tenants.",
+        },
+        {
+          title: "Secure onboarding",
+          description: "Built with role-based account flow and cleaner UX.",
+        },
+      ]}
+    >
+      {generalError && (
+        <AuthErrorAlert
+          error={generalError}
+          title="Registration failed"
+          errorRef={errorSummaryRef}
+        />
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Role Toggle */}
-          <div className="flex bg-slate-50 dark:bg-slate-700/50 p-1.5 rounded-xl mb-6 border border-slate-100 dark:border-slate-700">
-            <button type="button" onClick={() => setFormData({
-            ...formData,
-            role: Role.TENANT
-          })} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${formData.role === Role.TENANT ? 'bg-white dark:bg-slate-600 text-navy dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10' : 'text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white'}`}>
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+            I am here as
+          </label>
 
+          <div className="flex rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 p-1.5">
+            <button
+              type="button"
+              onClick={() => updateField("role", Role.TENANT)}
+              className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                formData.role === Role.TENANT
+                  ? "bg-white dark:bg-slate-700 text-navy dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                  : "text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white"
+              }`}
+              aria-pressed={formData.role === Role.TENANT}
+            >
               I need a room
             </button>
-            <button type="button" onClick={() => setFormData({
-            ...formData,
-            role: Role.OWNER
-          })} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${formData.role === Role.OWNER ? 'bg-white dark:bg-slate-600 text-navy dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10' : 'text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white'}`}>
 
-              I'm an owner
+            <button
+              type="button"
+              onClick={() => updateField("role", Role.OWNER)}
+              className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                formData.role === Role.OWNER
+                  ? "bg-white dark:bg-slate-700 text-navy dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                  : "text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white"
+              }`}
+              aria-pressed={formData.role === Role.OWNER}
+            >
+              I&apos;m an owner
             </button>
           </div>
 
-          {/* Full Name */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Full Name
-            </label>
-            <input type="text" required value={formData.name} onChange={(e) => setFormData({
-            ...formData,
-            name: e.target.value
-          })} className={inputClass('name')} placeholder="John Doe" />
+          {formErrors.role && (
+            <p className="mt-1.5 ml-1 text-xs text-red-600 dark:text-red-400">
+              {formErrors.role}
+            </p>
+          )}
+        </div>
 
-            {formErrors.name && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5 ml-1">
-                {formErrors.name}
-              </p>}
-          </div>
+        <div>
+          <label
+            htmlFor="name"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
+            Full name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            value={formData.name}
+            onChange={(e) => updateField("name", e.target.value)}
+            aria-invalid={!!formErrors.name}
+            aria-describedby={formErrors.name ? "name-error" : undefined}
+            className={inputClass("name")}
+            placeholder="John Doe"
+          />
+          {formErrors.name && (
+            <p
+              id="name-error"
+              className="mt-1.5 ml-1 text-xs text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {formErrors.name}
+            </p>
+          )}
+        </div>
 
-          {/* Phone Number — REQUIRED */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Phone Number
-            </label>
-            <input type="tel" inputMode='numeric' maxLength={12} required value={formData.phone} onChange={(e) => {
-  const value = e.target.value.replace(/[^\d+]/g, "");
-  setFormData({
-    ...formData,
-    phone: value,
-  });
-}} className={inputClass('phone')} placeholder="+91 98765 43210" />
+        <div>
+          <label
+            htmlFor="phone"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
+            Phone number
+          </label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={formData.phone}
+            onChange={(e) =>
+              updateField("phone", normalizePhone(e.target.value))
+            }
+            aria-invalid={!!formErrors.phone}
+            aria-describedby={formErrors.phone ? "phone-error" : undefined}
+            className={inputClass("phone")}
+            placeholder="+91 9876543210"
+          />
+          {formErrors.phone && (
+            <p
+              id="phone-error"
+              className="mt-1.5 ml-1 text-xs text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {formErrors.phone}
+            </p>
+          )}
+        </div>
 
-            {formErrors.phone && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5 ml-1">
-                {formErrors.phone}
-              </p>}
-          </div>
+        <div>
+          <label
+            htmlFor="email"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={formData.email}
+            onChange={(e) => updateField("email", e.target.value)}
+            aria-invalid={!!formErrors.email}
+            aria-describedby={formErrors.email ? "email-error" : undefined}
+            className={inputClass("email")}
+            placeholder="you@example.com"
+          />
+          {formErrors.email && (
+            <p
+              id="email-error"
+              className="mt-1.5 ml-1 text-xs text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {formErrors.email}
+            </p>
+          )}
+        </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Email Address
-            </label>
-            <input type="email" required value={formData.email} onChange={(e) => setFormData({
-            ...formData,
-            email: e.target.value
-          })} className={inputClass('email')} placeholder="you@example.com" />
+        <PasswordField
+          id="password"
+          name="password"
+          label="Password"
+          value={formData.password}
+          onChange={(value) => updateField("password", value)}
+          error={formErrors.password}
+          placeholder="Create a password"
+          autoComplete="new-password"
+        />
 
-            {formErrors.email && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5 ml-1">
-                {formErrors.email}
-              </p>}
-          </div>
+        <Button
+          type="submit"
+          disabled={isSubmitting || !isFormValid}
+          loading={isSubmitting}
+          fullWidth
+          size="lg"
+          className="mt-2 h-12 rounded-xl"
+        >
+          Create Account
+        </Button>
+      </form>
 
-          {/* Password */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Password
-            </label>
-            <input type="password" required value={formData.password} onChange={(e) => setFormData({
-            ...formData,
-            password: e.target.value
-          })} className={inputClass('password')} placeholder="••••••••" />
-
-            {formErrors.password && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5 ml-1">
-                {formErrors.password}
-              </p>}
-          </div>
-
-          <Button type="submit" disabled={isSubmitting} loading={isSubmitting} fullWidth size="lg" className="mt-2">
-
-            Create Account
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-8">
-          Already have an account?{' '}
-          <Link to="/auth/login" className="text-gold font-bold hover:underline hover:text-yellow-600 transition-colors">
-
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </div>;
+      <p className="mt-8 text-center text-sm text-slate-600 dark:text-slate-400">
+        Already have an account?{" "}
+        <Link
+          to="/auth/login"
+          className="font-semibold text-gold hover:text-yellow-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-gold rounded-sm transition-colors"
+        >
+          Sign in
+        </Link>
+      </p>
+    </AuthLayout>
+  );
 }

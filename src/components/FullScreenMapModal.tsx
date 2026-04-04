@@ -129,17 +129,22 @@ export const FullScreenMapModal: React.FC<FullScreenMapModalProps> = ({
       />
 
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-title"
+      >
         <div className="relative w-full h-full max-w-5xl max-h-screen bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-navy dark:text-white">{title}</h2>
+              <h2 id="map-title" className="text-xl font-bold text-navy dark:text-white">{title}</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{location}</p>
             </div>
             <button
               onClick={onClose}
-              className="ml-4 p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="ml-4 p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
               aria-label="Close map"
             >
               <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />

@@ -20,6 +20,9 @@ export class AdminController {
     this.requestCorrection = this.requestCorrection.bind(this);
     this.suspendProperty = this.suspendProperty.bind(this);
     this.getActivity = this.getActivity.bind(this);
+    this.trackContactAttempt = this.trackContactAttempt.bind(this);
+    this.trackOwnerLogin = this.trackOwnerLogin.bind(this);
+    this.trackPropertyUpdate = this.trackPropertyUpdate.bind(this);
   }
 
   /**
@@ -251,7 +254,8 @@ export class AdminController {
             select: {
               id: true,
               name: true,
-              email: true
+              email: true,
+              phone: true
             }
           }
         },
@@ -569,6 +573,193 @@ export class AdminController {
       res.status(500).json({
         success: false,
         message: "Failed to fetch agents"
+      });
+    }
+  }
+
+  /**
+   * POST /api/admin/properties/track-contact
+   * Track owner contact attempts when admin sends WhatsApp
+   * PROMPT 1: Update lastContactedAt and contactCount for each property
+   * 
+   * Body: { propertyIds: string[] }
+   * 
+   * Non-blocking: Runs async, doesn't block WhatsApp UI
+   * Safe: Skips properties without valid phone numbers
+   */
+  async trackContactAttempt(req: Request, res: Response) {
+    try {
+      const { propertyIds } = req.body;
+
+      if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'propertyIds must be a non-empty array'
+        });
+      }
+
+      // Update properties: increment contactCount and set lastContactedAt
+      const updated = await prisma.room.updateMany({
+        where: {
+          id: {
+            in: propertyIds
+          }
+        },
+        data: {
+          lastContactedAt: new Date(),
+          contactCount: {
+            increment: 1
+          }
+        }
+      });
+
+      logger.info('Contact tracking recorded', {
+        propertyCount: updated.count,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json({
+        success: true,
+        data: {
+          count: updated.count,
+          timestamp: new Date().toISOString()
+        },
+        message: `Contact tracked for ${updated.count} properties`
+      });
+    } catch (error: any) {
+      logger.error('Error tracking contact attempts', {
+        error: error.message
+      });
+      // Non-blocking failure - don't break the WhatsApp flow
+      res.status(500).json({
+        success: false,
+        message: 'Failed to track contact (UI not affected)'
+      });
+    }
+  }
+
+  /**
+   * POST /api/admin/engagement/track-login
+   * PROMPT 2: Track when owner logs in - update User.lastLoginAt
+   * Called after successful owner login
+   * 
+   * Body: { userId: string }
+   * Non-blocking: Async update
+   */
+  async trackOwnerLogin(req: Request, res: Response) {
+    try {
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'userId is required'
+        });
+      }
+
+      // Update owner login timestamp
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: { lastLoginAt: new Date() },
+        select: {
+          id: true,
+          lastLoginAt: true
+        }
+      });
+
+      logger.info('Owner login tracked', {
+        userId,
+        timestamp: updated.lastLoginAt
+      });
+
+      res.json({
+        success: true,
+        data: {
+          userId: updated.id,
+          lastLoginAt: updated.lastLoginAt
+        }
+      });
+    } catch (error: any) {
+      logger.error('Error tracking login', {
+        error: error.message
+      });
+      res.status(500).json({
+        success: false,
+        message: 'Failed to track login'
+      });
+    }
+  }
+
+  /**
+   * POST /api/admin/engagement/track-property-update
+   * PROMPT 2: Track when owner updates property
+   * Called after property is updated by owner
+   * 
+   * Body: { propertyId: string }
+   * Updates: Room.lastPropertyUpdateAt and User.lastPropertyUpdateAt
+   * Non-blocking: Async update
+   */
+  async trackPropertyUpdate(req: Request, res: Response) {
+    try {
+      const { propertyId } = req.body;
+
+      if (!propertyId) {
+        return res.status(400).json({
+          success: false,
+          message: 'propertyId is required'
+        });
+      }
+
+      // Find property to get owner ID
+      const property = await prisma.room.findUnique({
+        where: { id: propertyId },
+        select: { ownerId: true }
+      });
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: 'Property not found'
+        });
+      }
+
+      // Update both room and owner timestamps
+      const now = new Date();
+      const [updatedRoom, updatedOwner] = await Promise.all([
+        prisma.room.update({
+          where: { id: propertyId },
+          data: { lastPropertyUpdateAt: now },
+          select: { id: true, lastPropertyUpdateAt: true }
+        }),
+        prisma.user.update({
+          where: { id: property.ownerId },
+          data: { lastPropertyUpdateAt: now },
+          select: { id: true, lastPropertyUpdateAt: true }
+        })
+      ]);
+
+      logger.info('Property update tracked', {
+        propertyId,
+        ownerId: property.ownerId,
+        timestamp: updatedRoom.lastPropertyUpdateAt
+      });
+
+      res.json({
+        success: true,
+        data: {
+          propertyId: updatedRoom.id,
+          ownerId: updatedOwner.id,
+          lastPropertyUpdateAt: updatedRoom.lastPropertyUpdateAt
+        },
+        message: 'Property update tracked'
+      });
+    } catch (error: any) {
+      logger.error('Error tracking property update', {
+        error: error.message
+      });
+      res.status(500).json({
+        success: false,
+        message: 'Failed to track property update'
       });
     }
   }

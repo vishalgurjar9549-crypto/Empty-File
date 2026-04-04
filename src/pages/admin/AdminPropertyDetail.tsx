@@ -1,10 +1,11 @@
 import React, { useEffect, useState, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, IndianRupee, Home, CheckCircle, XCircle, AlertTriangle, Ban, User, Clock, Shield, Star, Tag, Landmark, Calendar, RefreshCw, Wifi, Phone, Mail, Activity, TrendingUp, Images } from 'lucide-react';
+import { ArrowLeft, MapPin, IndianRupee, Home, CheckCircle, XCircle, AlertTriangle, Ban, User, Clock, Shield, Star, Tag, Landmark, Calendar, RefreshCw, Wifi, Phone, Mail, Activity, TrendingUp, Images, Edit, MessageCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchAllProperties, updatePropertyStatus, requestPropertyCorrection } from '../../store/slices/admin.slice';
 import { fetchAllUsers } from '../../store/slices/admin.slice';
 import { RequestCorrectionModal } from '../../components/admin/RequestCorrectionModal';
+import { EditPropertyModal } from '../../components/EditPropertyModal';
 import { PropertyStatus } from '../../types/admin.types';
 import { FeedbackReason, FeedbackSeverity } from '../../types/api.types';
 import { Button } from '../../components/ui/Button';
@@ -62,6 +63,18 @@ function SectionHeading({
       <h3 className="font-bold text-navy dark:text-white text-base">{title}</h3>
     </div>;
 }
+// ─── WhatsApp Helper Functions ─────────────────────────────────────────────────
+const isValidPhone = (phone?: string) => {
+  if (!phone) return false;
+  const clean = phone.replace(/\D/g, "");
+  return clean.length === 10;
+};
+
+const buildWhatsAppMessage = (ownerName?: string, propertyTitle?: string) => {
+  const name = ownerName || "Owner";
+  const title = propertyTitle || "your property";
+  return `Hi ${name},\n\nYour property "${title}" is now listed on Homilivo.\n\nPlease login using your phone and update/correct details if needed:\nhttps://homilivo.com`;
+};
 // ─── Main component ────────────────────────────────────────────────────────────
 export function AdminPropertyDetail() {
   const {
@@ -82,8 +95,7 @@ export function AdminPropertyDetail() {
   // ── Gallery state ──────────────────────────────────────────────────────────
   const [selectedImage, setSelectedImage] = useState<string>('');
   // ── Action state ───────────────────────────────────────────────────────────
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);  const [isEditOpen, setIsEditOpen] = useState(false);  const [actionLoading, setActionLoading] = useState<string | null>(null);
   // ── Fetch if missing ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!property && !loading) {
@@ -162,6 +174,13 @@ export function AdminPropertyDetail() {
     } finally {
       setActionLoading(null);
     }
+  };
+  const handleWhatsApp = () => {
+    if (!owner?.phone) return;
+    const cleanPhone = owner.phone.replace(/\D/g, "").slice(-10);
+    const message = encodeURIComponent(buildWhatsAppMessage(owner.name, property.title));
+    const url = `https://wa.me/91${cleanPhone}?text=${message}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
   const currentStatus = property.reviewStatus || (property as any).status || 'pending';
   const allImages = property.images ?? [];
@@ -394,6 +413,16 @@ export function AdminPropertyDetail() {
 
 
               <div className="space-y-2.5">
+                <Button fullWidth size="sm" className="!bg-navy hover:!bg-navy/90 !text-white border-none justify-start" onClick={() => setIsEditOpen(true)} loading={false}>
+
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Property
+                  </Button>
+                {isValidPhone(owner?.phone) && <Button fullWidth size="sm" className="!bg-green-600 hover:!bg-green-700 !text-white border-none justify-start" onClick={handleWhatsApp}>
+
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Send WhatsApp
+                  </Button>}
                 {currentStatus !== 'approved' && <Button fullWidth size="sm" className="!bg-green-600 hover:!bg-green-700 !text-white border-none justify-start" onClick={() => handleStatusUpdate('approved')} loading={actionLoading === 'approved'}>
 
                     <CheckCircle className="w-4 h-4 mr-2" />
@@ -535,6 +564,18 @@ export function AdminPropertyDetail() {
 
       {/* Correction Modal */}
       <RequestCorrectionModal isOpen={isCorrectionModalOpen} onClose={() => setIsCorrectionModalOpen(false)} onConfirm={handleRequestCorrection} propertyTitle={property.title} />
+
+      {/* Edit Property Modal */}
+      <EditPropertyModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        room={property}
+        isAdmin={true}
+        onEditComplete={() => {
+          setIsEditOpen(false);
+          dispatch(fetchAllProperties({}));
+        }}
+      />
 
     </div>;
 }

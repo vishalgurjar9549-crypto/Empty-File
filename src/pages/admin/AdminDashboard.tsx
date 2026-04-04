@@ -49,7 +49,7 @@ export function AdminDashboard() {
       </p>
     </div>;
   return <div className="min-h-screen bg-cream dark:bg-slate-950 pt-20 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         <div className="mb-8">
           <h1 className="text-2xl md:text-3xl font-bold text-navy dark:text-white font-playfair">
             Admin Dashboard
@@ -60,7 +60,7 @@ export function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-8 sm:mb-12">
           <StatCard icon={Users} label="Total Users" value={stats?.totalUsers || 0} colorClass="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" link="/admin/users" />
 
           <StatCard icon={Home} label="Total Properties" value={stats?.totalProperties || 0} colorClass="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" link="/admin/properties" />
@@ -71,10 +71,10 @@ export function AdminDashboard() {
 
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* Recent Activity Feed */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <Activity className="w-5 h-5 text-navy dark:text-white" />
                 <h2 className="text-lg font-bold text-navy dark:text-white">
@@ -84,7 +84,7 @@ export function AdminDashboard() {
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-700 max-h-[500px] overflow-y-auto">
-              {recentActivity.length > 0 ? recentActivity.map((log) => <div key={log.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-start gap-4">
+              {recentActivity.length > 0 ? recentActivity.map((log) => <div key={log.id} className="p-3 sm:p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-start gap-4">
 
                     <div className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${log.type === 'success' ? 'bg-green-500' : log.type === 'warning' ? 'bg-yellow-500' : log.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`} />
 
@@ -104,12 +104,12 @@ export function AdminDashboard() {
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 h-fit">
-            <h2 className="text-lg font-bold text-navy dark:text-white mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-4 sm:p-6 h-fit">
+            <h2 className="text-lg font-bold text-navy dark:text-white mb-4 sm:mb-6">
               Quick Actions
             </h2>
-            <div className="space-y-4">
-              <Link to="/admin/properties" className="block w-full p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
+            <div className="space-y-3 sm:space-y-4">
+              <Link to="/admin/properties" className="block w-full p-3 sm:p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
 
                 <div className="flex items-center justify-between">
                   <span className="font-medium dark:text-white dark:group-hover:text-navy">
@@ -122,7 +122,7 @@ export function AdminDashboard() {
                 </p>
               </Link>
 
-              <Link to="/admin/users" className="block w-full p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
+              <Link to="/admin/users" className="block w-full p-3 sm:p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
 
                 <div className="flex items-center justify-between">
                   <span className="font-medium dark:text-white dark:group-hover:text-navy">
@@ -135,7 +135,7 @@ export function AdminDashboard() {
                 </p>
               </Link>
 
-              <Link to="/admin/agent-assignments" className="block w-full p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
+              <Link to="/admin/agent-assignments" className="block w-full p-3 sm:p-4 bg-navy/5 dark:bg-white/5 hover:bg-navy hover:text-white dark:hover:bg-white dark:hover:text-navy rounded-xl transition-all duration-200 group">
 
                 <div className="flex items-center justify-between">
                   <span className="font-medium dark:text-white dark:group-hover:text-navy">

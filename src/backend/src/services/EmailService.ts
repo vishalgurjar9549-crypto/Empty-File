@@ -1,6 +1,6 @@
-import { Resend } from 'resend';
-import { logger } from '../utils/logger';
-import { env } from '../config/env';
+import { Resend } from "resend";
+import { logger } from "../utils/logger";
+import { env } from "../config/env";
 
 /**
  * EMAIL SERVICE
@@ -59,26 +59,26 @@ export class EmailService {
         from: `${env.EMAIL.FROM_NAME} <${env.EMAIL.FROM_EMAIL}>`,
         to: params.to,
         subject: params.subject,
-        html: params.html || params.text,
-        text: params.text,
+        html: params.html || "",
+        text: params.text || "",
       });
 
-      if (!response.id) {
-        throw new Error('No email ID returned from Resend');
+      if (!response.data?.id) {
+        throw new Error("Email sending failed");
       }
 
-      logger.info('Email sent successfully', {
+      logger.info("Email sent successfully", {
         to: params.to,
-        messageId: response.id,
-        subject: params.subject
+        messageId: response.data.id,
+        subject: params.subject,
       });
     } catch (error: any) {
       // Error is logged, NOT thrown
-      logger.error('Email send failed', {
+      logger.error("Email send failed", {
         to: params.to,
         subject: params.subject,
         error: error.message,
-        code: error.code
+        code: error.code,
       });
     }
   }
@@ -104,16 +104,19 @@ export class EmailService {
 
     await this.send({
       to: email,
-      subject: 'Your OTP Code — Homilivo',
+      subject: "Your OTP Code — Homilivo",
       html,
-      text
+      text,
     });
   }
 
   /**
    * Send email verification
    */
-  async sendVerificationEmail(email: string, verificationLink: string): Promise<void> {
+  async sendVerificationEmail(
+    email: string,
+    verificationLink: string,
+  ): Promise<void> {
     const html = `
       <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto;">
         <h2 style="color: #333;">Verify Your Email</h2>
@@ -130,9 +133,9 @@ export class EmailService {
 
     await this.send({
       to: email,
-      subject: 'Verify Your Email — Homilivo',
+      subject: "Verify Your Email — Homilivo",
       html,
-      text
+      text,
     });
   }
 
@@ -156,9 +159,9 @@ export class EmailService {
 
     await this.send({
       to: email,
-      subject: 'Reset Your Password — Homilivo',
+      subject: "Reset Your Password — Homilivo",
       html,
-      text
+      text,
     });
   }
 }

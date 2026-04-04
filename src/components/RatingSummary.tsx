@@ -1,19 +1,6 @@
-import { useMemo } from 'react';
-import { Star } from 'lucide-react';
+import { useMemo } from "react";
+import { Star } from "lucide-react";
 
-/**
- * ⭐ RATING SUMMARY COMPONENT
- * 
- * Displays:
- * - Average rating (stars)
- * - Total reviews count
- * - Rating distribution (1-5 stars)
- * 
- * Props:
- * - averageRating: number (0-5)
- * - totalReviews: number
- * - ratingDistribution: { 1: n, 2: n, 3: n, 4: n, 5: n }
- */
 interface RatingSummaryProps {
   averageRating: number;
   totalReviews: number;
@@ -25,90 +12,76 @@ interface RatingSummaryProps {
 export function RatingSummary({
   averageRating,
   totalReviews,
-  ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
 }: RatingSummaryProps) {
-  // ✅ Memoize distribution bar rendering
   const distributionBars = useMemo(() => {
-    const maxCount = Math.max(...Object.values(ratingDistribution), 1);
+    const max = Math.max(...Object.values(ratingDistribution), 1);
+
     return [5, 4, 3, 2, 1].map((stars) => {
       const count = ratingDistribution[stars] || 0;
-      const percentage = (count / maxCount) * 100;
-      return { stars, count, percentage };
+      return {
+        stars,
+        count,
+        percent: (count / max) * 100,
+      };
     });
   }, [ratingDistribution]);
 
-  // If no reviews, show placeholder
   if (totalReviews === 0) {
     return (
-      <div className="mb-12 p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
-        <div className="flex justify-center mb-4">
-          <Star className="w-8 h-8 text-slate-300 dark:text-slate-600" />
-        </div>
-        <p className="text-slate-600 dark:text-slate-400 font-medium">
-          No reviews yet. Be the first to review this property!
+      <div className="text-center py-10">
+        <Star className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+        <p className="text-sm text-slate-500">
+          No reviews yet. Be the first to review.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="mb-12 bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-200 dark:border-slate-700 shadow-sm">
-      {/* Header with rating and count */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center gap-1">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`w-6 h-6 ${
-                    i < Math.round(averageRating)
-                      ? 'fill-gold text-gold'
-                      : 'text-slate-300 dark:text-slate-600'
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-3xl font-bold text-navy dark:text-white">
-              {averageRating.toFixed(1)}
-            </span>
+    <div className="grid md:grid-cols-2 gap-6 items-center">
+      {/* LEFT */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl font-bold text-slate-900 dark:text-white">
+            {averageRating.toFixed(1)}
+          </span>
+
+          <div className="flex gap-0.5">
+            {[...Array(5)].map((_, i) => (
+              <Star
+                key={i}
+                className={`w-5 h-5 ${
+                  i < Math.round(averageRating)
+                    ? "fill-gold text-gold"
+                    : "text-slate-300 dark:text-slate-600"
+                }`}
+              />
+            ))}
           </div>
-          <p className="text-slate-600 dark:text-slate-400">
-            {totalReviews} {totalReviews === 1 ? 'review' : 'reviews'}
-          </p>
         </div>
 
-        {/* Rating scale indicator */}
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          {averageRating >= 4.5 && '⭐ Excellent'}
-          {averageRating >= 4 && averageRating < 4.5 && '⭐ Very Good'}
-          {averageRating >= 3 && averageRating < 4 && '⭐ Good'}
-          {averageRating >= 2 && averageRating < 3 && '⭐ Fair'}
-          {averageRating < 2 && '⭐ Needs Improvement'}
-        </div>
+        <p className="text-sm text-slate-500">
+          {totalReviews} review{totalReviews !== 1 ? "s" : ""}
+        </p>
       </div>
 
-      {/* Distribution bars */}
-      <div className="space-y-3">
-        {distributionBars.map(({ stars, count, percentage }) => (
-          <div key={stars} className="flex items-center gap-3">
-            {/* Star label */}
-            <div className="w-12 text-sm font-medium text-slate-600 dark:text-slate-400">
-              {stars} {stars === 1 ? '⭐' : '⭐'}
-            </div>
+      {/* RIGHT */}
+      <div className="space-y-2">
+        {distributionBars.map(({ stars, count, percent }) => (
+          <div key={stars} className="flex items-center gap-3 text-sm">
+            <span className="w-8 text-slate-500">{stars}★</span>
 
-            {/* Progress bar */}
-            <div className="flex-1 bg-slate-100 dark:bg-slate-700/50 h-2 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="bg-gold h-full rounded-full transition-all duration-300"
-                style={{ width: `${percentage}%` }}
+                className="h-full bg-gold rounded-full"
+                style={{ width: `${percent}%` }}
               />
             </div>
 
-            {/* Count */}
-            <div className="w-12 text-sm font-medium text-slate-600 dark:text-slate-400 text-right">
+            <span className="w-8 text-right text-slate-500">
               {count}
-            </div>
+            </span>
           </div>
         ))}
       </div>

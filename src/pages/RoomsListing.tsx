@@ -1,286 +1,263 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Filter, SlidersHorizontal, Search } from 'lucide-react';
+import { Filter, Search, X } from 'lucide-react';
+
 import { RoomCard } from '../components/RoomCard';
 import { FilterSidebar } from '../components/FilterSidebar';
-import { FilterChips } from '../components/FilterChips';
-import { LoadMoreSection } from '../components/LoadMoreSection';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchRooms } from '../store/slices/rooms.slice';
-import { RoomFilters } from '../types/api.types';
 
+/* =========================================================
+   FILTER CHIPS
+========================================================= */
+function FilterChips({ appliedFilters, onRemoveFilter }: any) {
+  const hasFilters =
+    appliedFilters.city ||
+    appliedFilters.minPrice ||
+    appliedFilters.maxPrice ||
+    appliedFilters.roomType;
+
+  if (!hasFilters) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {appliedFilters.city && (
+        <Chip
+          label={`City: ${appliedFilters.city}`}
+          onRemove={() => onRemoveFilter('city')}
+        />
+      )}
+
+      {(appliedFilters.minPrice || appliedFilters.maxPrice) && (
+        <Chip
+          label={`₹${appliedFilters.minPrice || 0} - ₹${appliedFilters.maxPrice || 'Any'}`}
+          onRemove={() => onRemoveFilter('price')}
+        />
+      )}
+
+      {appliedFilters.roomType && (
+        <Chip
+          label={`Type: ${appliedFilters.roomType.toUpperCase()}`}
+          onRemove={() => onRemoveFilter('roomType')}
+        />
+      )}
+    </div>
+  );
+}
+
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      className="group inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 dark:bg-gold/15 dark:border-gold/25 px-3.5 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm transition-all duration-200 hover:border-gold hover:bg-gold/15 dark:hover:bg-gold/20 hover:shadow-md"
+    >
+      <span className="truncate">{label}</span>
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 dark:bg-slate-800/80 transition-colors group-hover:bg-white dark:group-hover:bg-slate-700">
+        <X className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+      </span>
+    </button>
+  );
+}
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
 export function RoomsListing() {
   const dispatch = useAppDispatch();
-  const {
-    rooms,
-    loading,
-    meta
-  } = useAppSelector((state) => state.rooms);
+  const { rooms, loading, meta } = useAppSelector((state) => state.rooms);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // ============================================
-  // FIX #1: Helper to parse filters from URL (no useCallback needed)
-  // ============================================
+  /* =============================
+     GET FILTERS FROM URL
+  ============================== */
   const getFiltersFromURL = () => {
-    const amenitiesStr = searchParams.get('amenities') || '';
-    // Support both 'roomType' (new) and 'type' (legacy) for backward compatibility
-    const roomTypeStr = searchParams.get('roomType') || searchParams.get('type') || '';
     return {
       city: searchParams.get('city') || '',
       minPrice: searchParams.get('minPrice') || '',
       maxPrice: searchParams.get('maxPrice') || '',
-      roomType: roomTypeStr ? roomTypeStr.split(',').filter(Boolean) : [],
-      forWhom: searchParams.get('forWhom') || '',
-      amenities: amenitiesStr ? amenitiesStr.split(',').filter(Boolean) : [] as string[]
+      roomType: searchParams.get('roomType') || '',
     };
   };
 
-  // ============================================
-  // FIX #2: Initialize filters from URL using useState initializer
-  // Initializer function only runs once on component mount
-  // ============================================
   const [filters, setFilters] = useState(() => getFiltersFromURL());
   const [appliedFilters, setAppliedFilters] = useState(() => getFiltersFromURL());
-  const [sortBy, setSortBy] = useState(() => searchParams.get('sort') || 'recommended');
+  const [sortBy, setSortBy] = useState(() => searchParams.get('sort') || 'latest');
+  const [page, setPage] = useState(() => Number(searchParams.get('page') || '1'));
 
-  // ============================================
-  // FIX #3: Create memoized apiFilters object
-  // Prevents object recreation on every render
-  // Only recreates when actual filter values change
-  // ============================================
-  const apiFilters = useMemo(() => ({
-    city: appliedFilters.city || undefined,
-    minPrice: appliedFilters.minPrice || undefined,
-    maxPrice: appliedFilters.maxPrice || undefined,
-    roomType: appliedFilters.roomType?.length ? appliedFilters.roomType.join(',') : undefined,
-    idealFor: appliedFilters.forWhom || undefined,
-    amenities: appliedFilters.amenities?.length ? appliedFilters.amenities.join(',') : undefined,
-    onlyActive: 'true',
-    sort: sortBy,
-    page: 1,
-    limit: 20
-  }), [appliedFilters, sortBy]);
+  /* =============================
+     API FILTERS MEMO
+  ============================== */
+  const apiFilters = useMemo(
+    () => ({
+      city: appliedFilters.city || undefined,
+      minPrice: appliedFilters.minPrice || undefined,
+      maxPrice: appliedFilters.maxPrice || undefined,
+      roomType: appliedFilters.roomType || undefined,
+      sort: sortBy,
+      page,
+      limit: 20,
+    }),
+    [appliedFilters, sortBy, page]
+  );
 
-  // ============================================
-  // Handler for Apply Filters button
-  // ============================================
+  /* =============================
+     APPLY FILTERS
+  ============================== */
   const handleApplyFilters = (newFilters: any) => {
     setFilters(newFilters);
     setAppliedFilters(newFilters);
+    setPage(1);
   };
 
-  // ============================================
-  // Handler for removing individual filters via chips
-  // ============================================
-  const handleRemoveFilter = (filterKey: string, value?: string) => {
+  /* =============================
+     REMOVE FILTER CHIP
+  ============================== */
+  const handleRemoveFilter = (key: string, value?: string) => {
     const updated = { ...appliedFilters };
 
-    if (filterKey === 'roomType' && value) {
-      // Remove specific room type
-      updated.roomType = (updated.roomType || []).filter((t: string) => t !== value);
-    } else if (filterKey === 'amenities' && value) {
-      // Remove specific amenity
-      updated.amenities = (updated.amenities || []).filter((a: string) => a !== value);
-    } else if (filterKey === 'price') {
-      // Clear both min and max price
+    if (key === 'roomType') {
+      updated.roomType = '';
+    } else if (key === 'price') {
       updated.minPrice = '';
       updated.maxPrice = '';
-    } else if (filterKey === 'city') {
-      // Clear city
-      updated.city = '';
-    } else if (filterKey === 'forWhom') {
-      // Clear forWhom
-      updated.forWhom = '';
+    } else {
+      (updated as any)[key] = '';
     }
 
-    // Apply the updated filters to BOTH states
     setAppliedFilters(updated);
     setFilters(updated);
+    setPage(1);
   };
 
-  // ============================================
-  // SYNC: When sidebar opens, sync filters from appliedFilters
-  // This ensures UI inputs reflect current applied filters
-  // ============================================
+  /* =============================
+     SYNC URL
+  ============================== */
   useEffect(() => {
-    if (isFilterOpen) {
-      setFilters(appliedFilters);
-    }
-  }, [isFilterOpen, appliedFilters]);
+    const params = new URLSearchParams();
 
-  // ============================================
-  // REFS: Track Strict Mode double calls & filter changes
-  // ============================================
-  const hasFetchedRef = useRef(false);
-  const prevApiKeyRef = useRef<string | null>(null);
+    if (appliedFilters.city) params.set('city', appliedFilters.city);
+    if (appliedFilters.minPrice) params.set('minPrice', appliedFilters.minPrice);
+    if (appliedFilters.maxPrice) params.set('maxPrice', appliedFilters.maxPrice);
+    if (appliedFilters.roomType) params.set('roomType', appliedFilters.roomType);
+    if (sortBy !== 'latest') params.set('sort', sortBy);
+    if (page > 1) params.set('page', String(page));
 
-  // ============================================
-  // Restore scroll position on component mount
-  // ============================================
+    setSearchParams(params);
+  }, [appliedFilters, sortBy, page, setSearchParams]);
+
+  /* =============================
+     FETCH DATA (STRICT MODE SAFE)
+  ============================== */
+  const fetchedRef = useRef(false);
+  const prevKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    const savedScrollY = sessionStorage.getItem('roomsScrollY');
-    if (savedScrollY) {
-      const scrollY = parseInt(savedScrollY, 10);
-      requestAnimationFrame(() => {
-        window.scrollTo(0, scrollY);
-      });
-      sessionStorage.removeItem('roomsScrollY');
-    }
-  }, []);
+    const key = JSON.stringify(apiFilters);
 
-  // ============================================
-  // Save scroll position when component unmounts
-  // ============================================
-  useEffect(() => {
-    return () => {
-      sessionStorage.setItem('roomsScrollY', String(window.scrollY));
-    };
-  }, []);
-
-  // ============================================
-  // Update URL when applied filters change
-  // (Separate from API call - this is for URL persistence)
-  // ============================================
-  useEffect(() => {
-    const newSearchParams = new URLSearchParams();
-
-    if (appliedFilters.city) newSearchParams.set('city', appliedFilters.city);
-    if (appliedFilters.minPrice) newSearchParams.set('minPrice', appliedFilters.minPrice);
-    if (appliedFilters.maxPrice) newSearchParams.set('maxPrice', appliedFilters.maxPrice);
-    if (appliedFilters.roomType?.length) newSearchParams.set('roomType', appliedFilters.roomType.join(','));
-    if (appliedFilters.forWhom) newSearchParams.set('forWhom', appliedFilters.forWhom);
-    if (appliedFilters.amenities?.length) newSearchParams.set('amenities', appliedFilters.amenities.join(','));
-    if (sortBy && sortBy !== 'recommended') newSearchParams.set('sort', sortBy);
-
-    setSearchParams(newSearchParams);
-  }, [appliedFilters, sortBy, setSearchParams]);
-
-  // ============================================
-  // FETCH ROOMS EFFECT - Handles filter changes + Strict Mode
-  // 
-  // How it works:
-  // 1. Creates unique key from current filters (apiKey)
-  // 2. Checks if filters changed (prevApiKeyRef !== apiKey)
-  // 3. If changed: reset hasFetchedRef to allow new fetch
-  // 4. If same: block via hasFetchedRef (prevents Strict Mode double)
-  // 5. Stores new apiKey for next comparison
-  // ============================================
-  useEffect(() => {
-    const apiKey = JSON.stringify(apiFilters);
-
-    // Allow fetch if filters changed (new apiKey)
-    if (prevApiKeyRef.current !== apiKey) {
-      hasFetchedRef.current = false;
+    if (prevKeyRef.current !== key) {
+      fetchedRef.current = false;
     }
 
-    // Prevent double call (React Strict Mode safety)
-    if (hasFetchedRef.current) return;
+    if (fetchedRef.current) return;
 
-    // Mark that we've fetched this filter combination
-    hasFetchedRef.current = true;
-    prevApiKeyRef.current = apiKey;
+    fetchedRef.current = true;
+    prevKeyRef.current = key;
 
-    // Fetch rooms with current filters
     dispatch(fetchRooms(apiFilters));
   }, [apiFilters, dispatch]);
 
-  return <div className="min-h-screen bg-cream dark:bg-slate-950  transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+  /* =============================
+     UI
+  ============================== */
+  return (
+    <div className="min-h-screen bg-cream dark:bg-slate-950">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* HEADER */}
+        <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-navy dark:text-white font-playfair mb-1">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
               Find Your Stay
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Showing {meta?.total || 0} properties available now
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {meta?.total || 0} properties
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3 w-full md:w-auto">
-            <button onClick={() => setIsFilterOpen(true)} className="lg:hidden flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-navy dark:text-white font-medium shadow-sm active:scale-95 transition-all">
-
-              <Filter className="w-4 h-4" />
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsFilterOpen(true)}
+              className="lg:hidden inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm transition hover:border-gold hover:text-gold"
+            >
+              <Filter className="h-4 w-4" />
               Filters
             </button>
 
-            <div className="relative flex-1 min-w-[180px] md:w-56">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="w-full appearance-none pl-4 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-white text-sm font-medium focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 cursor-pointer shadow-sm">
-
-                <option value="recommended">Recommended</option>
-                <option value="popular">Popular</option>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
-              </select>
-              <SlidersHorizontal className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/20"
+            >
+              <option value="latest">Latest</option>
+              <option value="most_viewed">Most Viewed</option>
+              <option value="most_contacted">Most Contacted</option>
+              <option value="price_low">Price Low → High</option>
+              <option value="price_high">Price High → Low</option>
+            </select>
           </div>
         </div>
 
-        {/* Filter Chips - Airbnb style applied filters */}
+        {/* FILTER CHIPS */}
         <div className="mb-6">
-          <FilterChips appliedFilters={appliedFilters} onRemoveFilter={handleRemoveFilter} />
+          <FilterChips
+            appliedFilters={appliedFilters}
+            onRemoveFilter={handleRemoveFilter}
+          />
         </div>
 
-        <div className="flex gap-8 items-start">
-          {/* Sidebar */}
-          <FilterSidebar filters={filters} setFilters={setFilters} onApplyFilters={handleApplyFilters} isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+        {/* CONTENT */}
+        <div className="flex items-start gap-6">
+          <FilterSidebar
+            filters={filters}
+            setFilters={setFilters}
+            onApplyFilters={handleApplyFilters}
+            isOpen={isFilterOpen}
+            onClose={() => setIsFilterOpen(false)}
+          />
 
-
-          {/* Grid */}
-          <div className="flex-1 min-w-0">
-            {loading.fetch ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm h-[400px] animate-pulse">
-
-                    <div className="h-56 bg-slate-200 dark:bg-slate-800"></div>
-                    <div className="p-5 space-y-4">
-                      <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded"></div>
-                      <div className="h-6 w-3/4 bg-slate-200 dark:bg-slate-800 rounded"></div>
-                      <div className="h-4 w-full bg-slate-200 dark:bg-slate-800 rounded"></div>
-                    </div>
-                  </div>)}
-              </div> : rooms.length > 0 ? <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {rooms.map((room) => <RoomCard key={room.id} room={room} />)}
-                </div>
-                {/* ✅ INFINITE SCROLL: LoadMoreSection triggers when scrolled to bottom */}
-                <LoadMoreSection
-                  meta={meta}
-                  loading={loading.fetch}
-                  currentFilters={apiFilters}
-                  enableInfiniteScroll={true}
-                />
-              </div> : <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-center px-4">
-                <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-                  <Search className="w-10 h-10 text-slate-300 dark:text-slate-600" />
-                </div>
-                <h3 className="text-xl font-bold text-navy dark:text-white mb-2 font-playfair">
+          {/* GRID */}
+          <div className="min-w-0 flex-1">
+            {loading.fetch ? (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-[300px] rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : rooms.length ? (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {rooms.map((room: any) => (
+                  <RoomCard key={room.id} room={room} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 py-20 text-center">
+                <Search className="mx-auto mb-4 h-10 w-10 opacity-30" />
+                <p className="text-slate-600 dark:text-slate-300">
                   No properties found
-                </h3>
-                <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
-                  We couldn't find any matches for your current filters. Try
-                  adjusting your search criteria.
                 </p>
-                <button onClick={() => {
-              const clearedFilters = {
-                city: '',
-                minPrice: '',
-                maxPrice: '',
-                roomType: [],
-                forWhom: '',
-                amenities: []
-              };
-              setFilters(clearedFilters);
-              handleApplyFilters(clearedFilters);
-            }} className="px-8 py-3 bg-navy dark:bg-white text-white dark:text-navy font-semibold rounded-xl hover:bg-gold dark:hover:bg-slate-200 transition-colors shadow-lg shadow-navy/20">
-
-                  Clear All Filters
-                </button>
-              </div>}
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>;
+    </div>
+  );
 }

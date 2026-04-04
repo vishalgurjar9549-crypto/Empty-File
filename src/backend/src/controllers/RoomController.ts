@@ -4,12 +4,21 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { RoomFilters } from '../models/Room';
 import { logger } from '../utils/logger';
 import { normalizeCity } from '../utils/normalize';
+
+const ROOM_TYPE_MAP: Record<string, "Single" | "Shared" | "PG" | "1BHK" | "2BHK"> = {
+  single: "Single",
+  shared: "Shared",
+  pg: "PG",
+  "1bhk": "1BHK",
+  "2bhk": "2BHK",
+};
 export class RoomController {
   constructor(private roomService: RoomService) {
     // Bind all methods to preserve 'this' context
     this.createRoom = this.createRoom.bind(this);
     this.getAllRooms = this.getAllRooms.bind(this);
     this.getRoomById = this.getRoomById.bind(this);
+    this.getDemandStats = this.getDemandStats.bind(this);
     this.updateRoom = this.updateRoom.bind(this);
     this.deleteRoom = this.deleteRoom.bind(this);
     this.getOwnerRooms = this.getOwnerRooms.bind(this);
@@ -64,49 +73,31 @@ export class RoomController {
   }
   async getAllRooms(req: Request, res: Response) {
     try {
-      // ✅ CRITICAL FIX: Normalize city query parameter before database lookup
       const cityParam = typeof req.query.city === 'string' ? req.query.city : undefined;
       const normalizedCity = cityParam ? normalizeCity(cityParam) : undefined;
-      const amenitiesParam = typeof req.query.amenities === 'string' ? req.query.amenities : undefined;
-      const amenitiesList =
-        amenitiesParam && amenitiesParam.trim().length > 0
-          ? amenitiesParam.split(',').map((s) => s.trim()).filter(Boolean)
+      const roomTypeParam =
+        typeof req.query.roomType === 'string' && req.query.roomType.trim().length > 0
+          ? req.query.roomType.trim()
           : undefined;
-      const roomTypeParam = typeof req.query.roomType === 'string' ? req.query.roomType : undefined;
-      const roomTypeList =
-        roomTypeParam && roomTypeParam.trim().length > 0
-          ? roomTypeParam.split(',').map((s) => s.trim()).filter(Boolean)
-          : undefined;
-
-      // 🔥 VALIDATION: Manually validate each roomType value after parsing
-      const VALID_ROOM_TYPES = ["Single", "Shared", "PG", "1BHK", "2BHK"];
-      if (roomTypeList && roomTypeList.length > 0) {
-        const invalidTypes = roomTypeList.filter(t => !VALID_ROOM_TYPES.includes(t));
-        if (invalidTypes.length > 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid roomType values: ${invalidTypes.join(', ')}. Valid options are: ${VALID_ROOM_TYPES.join(', ')}`
-          });
-        }
+      const normalizedRoomType = roomTypeParam
+        ? ROOM_TYPE_MAP[roomTypeParam.toLowerCase()]
+        : undefined;
+      if (roomTypeParam && !normalizedRoomType) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid room type'
+        });
       }
-
-      const sortParam = typeof req.query.sort === 'string' ? req.query.sort.trim() : undefined;
-      const cursorParam =
-        typeof req.query.cursor === 'string' && req.query.cursor.trim().length > 0
-          ? req.query.cursor.trim()
-          : undefined;
+      const sortParam =
+        typeof req.query.sort === 'string' && req.query.sort.trim().length > 0
+          ? req.query.sort.trim()
+          : 'latest';
       const filters: RoomFilters = {
         page: Number(req.query.page ?? 1),
         limit: Number(req.query.limit ?? 20),
-        onlyActive: req.query.onlyActive !== 'false',
         city: normalizedCity,
-        roomType: roomTypeList,
-        idealFor: typeof req.query.idealFor === 'string' ? req.query.idealFor as any : undefined,
-        amenities: amenitiesList,
-        sort: sortParam,
-        cursor: cursorParam,
-        isVerified: req.query.isVerified === 'true',
-        isPopular: req.query.isPopular === 'true' ? true : undefined,
+        roomType: normalizedRoomType,
+        sort: sortParam as RoomFilters["sort"],
         minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
         maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined
       };
@@ -143,6 +134,12 @@ export class RoomController {
       // req.user is set by authMiddleware if a valid token is present; undefined otherwise.
       const requesterRole = (req as AuthRequest).user?.role;
       const room = await this.roomService.getRoomById(id, requesterRole);
+      void this.roomService.recordPropertyView(room, (req as AuthRequest).user?.userId).catch((error: any) => {
+        logger.warn('Failed to record property view event', {
+          roomId: id,
+          error: error?.message || 'Unknown error'
+        });
+      });
       res.json({
         success: true,
         data: room
@@ -157,6 +154,29 @@ export class RoomController {
         });
       }
       res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+  async getDemandStats(req: Request, res: Response) {
+    try {
+      const {
+        id
+      } = req.params;
+      const stats = await this.roomService.getDemandStats(id);
+      return res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error: any) {
+      if (error.message === 'Room not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Room not found'
+        });
+      }
+      return res.status(500).json({
         success: false,
         message: error.message
       });
@@ -195,7 +215,8 @@ export class RoomController {
           message: 'User not authenticated'
         });
       }
-      await this.roomService.deleteRoom(id, ownerId);
+      const requesterRole = req.user?.role;
+      await this.roomService.deleteRoom(id, ownerId, requesterRole);
       res.status(204).send();
     } catch (error: any) {
       res.status(400).json({
@@ -230,7 +251,8 @@ export class RoomController {
           message: 'User not authenticated'
         });
       }
-      const room = await this.roomService.toggleRoomStatus(id, ownerId);
+      const requesterRole = req.user?.role;
+      const room = await this.roomService.toggleRoomStatus(id, ownerId, requesterRole);
       res.json({
         success: true,
         data: room,

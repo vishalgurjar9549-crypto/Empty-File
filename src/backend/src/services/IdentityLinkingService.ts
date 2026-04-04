@@ -79,14 +79,16 @@ export class IdentityLinkingService {
     // STEP 1: CHECK IF EMAIL EXISTS (highest priority)
     // ═════════════════════════════════════════════════════════════════════
     if (normalizedEmail) {
-      const userByEmail = await this.userRepository.findByEmail(normalizedEmail);
+      const userByEmail = await this.userRepository.findByEmail(
+        normalizedEmail,
+      );
       if (userByEmail) {
         if (!userByEmail.isActive) {
           throw new ForbiddenError("Account has been disabled");
         }
         logger.info("Found existing user by email", {
           userId: userByEmail.id,
-          email: normalizedEmail
+          email: normalizedEmail,
         });
         return userByEmail;
       }
@@ -96,14 +98,16 @@ export class IdentityLinkingService {
     // STEP 2: CHECK IF PHONE EXISTS
     // ═════════════════════════════════════════════════════════════════════
     if (normalizedPhone) {
-      const userByPhone = await this.userRepository.findByPhone(normalizedPhone);
+      const userByPhone = await this.userRepository.findByPhone(
+        normalizedPhone,
+      );
       if (userByPhone) {
         if (!userByPhone.isActive) {
           throw new ForbiddenError("Account has been disabled");
         }
         logger.info("Found existing user by phone", {
           userId: userByPhone.id,
-          phone: normalizedPhone
+          phone: normalizedPhone,
         });
         return userByPhone;
       }
@@ -114,7 +118,7 @@ export class IdentityLinkingService {
     // ═════════════════════════════════════════════════════════════════════
     logger.info("Creating new user from identity", {
       email: normalizedEmail,
-      phone: normalizedPhone
+      phone: normalizedPhone,
     });
 
     // Create placeholder password for passwordless users
@@ -123,7 +127,7 @@ export class IdentityLinkingService {
     const newUser = await this.userRepository.create({
       email: normalizedEmail || `temp_${Date.now()}@temporary.local`,
       password: placeholderPassword,
-      name: name || (normalizedEmail?.split("@")[0] || "User"),
+      name: name || normalizedEmail?.split("@")[0] || "User",
       role,
       phone: normalizedPhone || null,
       googleId: null,
@@ -133,13 +137,16 @@ export class IdentityLinkingService {
       emailVerified: false,
       emailVerifiedAt: null,
       emailVerifyToken: null,
-      emailVerifyExpiry: null
+      emailVerifyExpiry: null,
+      city: null,
+      lastLoginAt: null,
+      lastPropertyUpdateAt: null,
     });
 
     logger.info("Successfully created new user", {
       userId: newUser.id,
       email: normalizedEmail,
-      phone: normalizedPhone
+      phone: normalizedPhone,
     });
 
     return newUser;
@@ -150,10 +157,7 @@ export class IdentityLinkingService {
    * LINK EMAIL TO EXISTING USER (phone user adding email)
    * ═════════════════════════════════════════════════════════════════════
    */
-  async linkEmailToUser(
-    userId: string,
-    email: string
-  ): Promise<any> {
+  async linkEmailToUser(userId: string, email: string): Promise<any> {
     const normalizedEmail = this.normalizeEmail(email);
 
     // Check if this email is already in use by another user
@@ -168,13 +172,13 @@ export class IdentityLinkingService {
       data: {
         email: normalizedEmail,
         emailVerified: true,
-        emailVerifiedAt: new Date()
-      }
+        emailVerifiedAt: new Date(),
+      },
     });
 
     logger.info("Linked email to user", {
       userId,
-      email: normalizedEmail
+      email: normalizedEmail,
     });
 
     return updatedUser;
@@ -185,10 +189,7 @@ export class IdentityLinkingService {
    * LINK PHONE TO EXISTING USER (email user adding phone)
    * ═════════════════════════════════════════════════════════════════════
    */
-  async linkPhoneToUser(
-    userId: string,
-    phone: string
-  ): Promise<any> {
+  async linkPhoneToUser(userId: string, phone: string): Promise<any> {
     const normalizedPhone = this.normalizePhone(phone);
 
     // Check if this phone is already in use by another user
@@ -203,13 +204,13 @@ export class IdentityLinkingService {
       data: {
         phone: normalizedPhone,
         phoneVerified: true,
-        phoneVerifiedAt: new Date()
-      }
+        phoneVerifiedAt: new Date(),
+      },
     });
 
     logger.info("Linked phone to user", {
       userId,
-      phone: normalizedPhone
+      phone: normalizedPhone,
     });
 
     return updatedUser;
@@ -220,17 +221,16 @@ export class IdentityLinkingService {
    * LINK GOOGLE ID TO EXISTING USER
    * ═════════════════════════════════════════════════════════════════════
    */
-  async linkGoogleIdToUser(
-    userId: string,
-    googleId: string
-  ): Promise<any> {
+  async linkGoogleIdToUser(userId: string, googleId: string): Promise<any> {
     // Check if this googleId is already in use
     const existingUser = await this.prisma.user.findUnique({
-      where: { googleId }
+      where: { googleId },
     });
 
     if (existingUser && existingUser.id !== userId) {
-      throw new ValidationError("Google account already linked to another user");
+      throw new ValidationError(
+        "Google account already linked to another user",
+      );
     }
 
     // Update user with Google ID + auto-verify email (Google already verified)
@@ -241,13 +241,13 @@ export class IdentityLinkingService {
         emailVerified: true,
         emailVerifiedAt: new Date(),
         emailVerifyToken: null,
-        emailVerifyExpiry: null
-      }
+        emailVerifyExpiry: null,
+      },
     });
 
     logger.info("Linked Google ID to user", {
       userId,
-      googleId
+      googleId,
     });
 
     return updatedUser;
@@ -268,12 +268,12 @@ export class IdentityLinkingService {
 
     if (!user.emailVerified) {
       return {
-        verified: false
+        verified: false,
       };
     }
 
     return {
-      verified: true
+      verified: true,
     };
   }
 }

@@ -90,3 +90,49 @@
     }
   }
 }
+
+
+@keyframes city-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes city-marquee-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-city-marquee {
+  animation: city-marquee 45s linear infinite;
+}
+
+.animate-city-marquee-reverse {
+  animation: city-marquee-reverse 45s linear infinite;
+}
+
+/* Better UX */
+@media (prefers-reduced-motion: reduce) {
+  .animate-city-marquee,
+  .animate-city-marquee-reverse {
+    animation: none !important;
+  }
+}
+
+
+/* Hide scrollbar but keep scroll functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none; /* IE + Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}

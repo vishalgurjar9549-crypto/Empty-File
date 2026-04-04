@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Filter } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { loadCities, loadAmenities } from "../store/slices/metadata.slice";
+import { loadCities } from "../store/slices/metadata.slice";
 interface FilterSidebarProps {
   filters: any;
   setFilters: (filters: any) => void;
@@ -13,7 +13,14 @@ interface FilterSidebarProps {
 }
 const MAX_RENT = 500000; // industry upper bound
 const MIN_RENT = 0;
-const ROOM_TYPES = ["Single", "Shared", "PG", "1BHK", "2BHK"];
+const ROOM_TYPES = [
+  { label: "Single", value: "single" },
+  { label: "Shared", value: "shared" },
+  { label: "PG", value: "pg" },
+  { label: "1BHK", value: "1bhk" },
+  { label: "2BHK", value: "2bhk" },
+];
+const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
 export function FilterSidebar({
   filters,
   setFilters,
@@ -25,8 +32,7 @@ export function FilterSidebar({
 }: FilterSidebarProps) {
   const dispatch = useAppDispatch();
   const {
-    cities,
-    amenities
+    cities
   } = useAppSelector((state) => state.metadata);
 
   // Local state for editing filters
@@ -41,19 +47,14 @@ export function FilterSidebar({
     if (cities.length === 0) {
       dispatch(loadCities());
     }
-    if (amenities.length === 0) {
-      dispatch(loadAmenities());
-    }
-  }, [dispatch, cities.length, amenities.length]);
+  }, [dispatch, cities.length]);
 
   // Calculate active filter count
   const getActiveFilterCount = () => {
     let count = 0;
     if (localFilters.city) count++;
     if (localFilters.minPrice || localFilters.maxPrice) count++;
-    if (localFilters.roomType?.length) count++;
-    if (localFilters.forWhom) count++;
-    if (localFilters.amenities?.length) count++;
+    if (localFilters.roomType) count++;
     return count;
   };
   // Lock body scroll when mobile menu is open
@@ -96,12 +97,6 @@ export function FilterSidebar({
     });
   };
 
-  const toggleAmenity = (amenity: string) => {
-    const current = localFilters.amenities || [];
-    const updated = current.includes(amenity) ? current.filter((a: string) => a !== amenity) : [...current, amenity];
-    handleChange("amenities", updated);
-  };
-
   const handlePriceChange = (key: "minPrice" | "maxPrice", value: string) => {
     let num = Number(value);
     if (isNaN(num)) num = 0;
@@ -129,9 +124,7 @@ export function FilterSidebar({
       city: '',
       minPrice: '',
       maxPrice: '',
-      roomType: [],
-      forWhom: '',
-      amenities: []
+      roomType: '',
     };
     setLocalFilters(clearedFilters);
     setFilters(clearedFilters);
@@ -174,17 +167,28 @@ export function FilterSidebar({
           <div className="flex-1 overflow-y-auto p-5 space-y-8">
             {/* City */}
             <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Location
-              </h3>
+              <label
+                htmlFor="filter-city"
+                className="mb-3 flex items-center gap-1 text-sm font-semibold text-navy dark:text-white uppercase tracking-wider"
+              >
+                <span>Location</span>
+              </label>
               <div className="relative">
-                <select value={localFilters.city || ""} onChange={(e) => handleChange("city", e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
+                <select
+                  id="filter-city"
+                  value={localFilters.city || ""}
+                  onChange={(e) => handleChange("city", e.target.value)}
+                  aria-label="Filter by city"
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer hover:border-gold"
+                >
                   <option value="">All Cities</option>
-                  {cities.map((c) => <option key={c.id} value={c.id}>
+                  {cities.map((c) => (
+                    <option key={c.id} value={normalizeCityValue(c.name)}>
                       {c.name}
-                    </option>)}
+                    </option>
+                  ))}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m6 9 6 6 6-6" />
                   </svg>
@@ -232,16 +236,15 @@ export function FilterSidebar({
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {ROOM_TYPES.map((type) => {
-                  const isSelected = localFilters.roomType?.includes(type);
+                  const isSelected = localFilters.roomType === type.value;
                   return (
                     <button
-                      key={type}
+                      key={type.value}
                       onClick={() => {
-                        const current = localFilters.roomType || [];
-                        const updated = current.includes(type)
-                          ? current.filter((t: string) => t !== type)
-                          : [...current, type];
-                        handleChange("roomType", updated);
+                        handleChange(
+                          "roomType",
+                          isSelected ? "" : type.value
+                        );
                       }}
                       className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
                         isSelected
@@ -249,53 +252,14 @@ export function FilterSidebar({
                           : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
                       }`}
                     >
-                      {type}
+                      {type.label}
                     </button>
                   );
                 })}
               </div>
             </div>
-
-            {/* For Whom */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Ideal For
-              </h3>
-              <div className="space-y-2.5">
-                {["Students", "Working Professionals", "Family"].map((target) => <label key={target} className="flex items-center gap-3 cursor-pointer group select-none">
-                      <div className="relative flex items-center">
-                        <input type="radio" name="forWhom" checked={localFilters.forWhom === target} onChange={() => handleChange("forWhom", target)} className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 transition-all checked:border-gold checked:bg-gold hover:border-gold" />
-
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 transition-opacity peer-checked:opacity-100"></div>
-                      </div>
-                      <span className="text-slate-600 dark:text-slate-300 group-hover:text-navy dark:group-hover:text-white transition-colors">
-                        {target}
-                      </span>
-                    </label>)}
-              </div>
             </div>
-
-            {/* Amenities */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Amenities
-              </h3>
-              <div className="space-y-2.5">
-                {amenities.map((amenity) => <label key={amenity} className="flex items-center gap-3 cursor-pointer group select-none">
-                    <div className="relative flex items-center">
-                      <input type="checkbox" checked={localFilters.amenities?.includes(amenity)} onChange={() => toggleAmenity(amenity)} className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 transition-all checked:border-gold checked:bg-gold hover:border-gold" />
-
-                      <svg className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 transition-opacity peer-checked:opacity-100" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    </div>
-                    <span className="text-slate-600 dark:text-slate-300 group-hover:text-navy dark:group-hover:text-white transition-colors">
-                      {amenity}
-                    </span>
-                  </label>)}
-              </div>
-            </div>
-          </div>
+        
 
           {/* Footer Actions */}
           <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 space-y-3">

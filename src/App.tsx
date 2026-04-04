@@ -13,10 +13,7 @@ import { useAppSelector, useAppDispatch } from "./store/hooks";
 import { getCurrentUser } from "./store/slices/auth.slice";
 import { loadCities, loadAmenities } from "./store/slices/metadata.slice";
 import { hideToast } from "./store/slices/ui.slice";
-import {
-  fetchFavorites,
-  clearFavorites,
-} from "./store/slices/favorites.slice";
+import { fetchFavorites, clearFavorites } from "./store/slices/favorites.slice";
 import { Home } from "./pages/Home";
 import { RoomsListing } from "./pages/RoomsListing";
 import { RoomDetails } from "./pages/RoomDetails";
@@ -160,12 +157,16 @@ function AppContent() {
 
       <PhoneOtpModal />
 
-      <main className="min-h-screen flex flex-col">
-        {/* Content wrapper */}
-        <div className="flex-grow ">
-          {/* Global container */}
-          <div className="w-full">
-            <Routes>
+   <main
+  className={`min-h-screen flex flex-col ${
+    !isStandalonePage ? 'pt-20'  : ''
+  }`}
+>
+  {/* Content wrapper */}
+  <div className="flex-1">
+    {/* Global container */}
+    <div className="">
+      <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/rooms" element={<RoomsListing />} />
               <Route path="/rooms/:id" element={<RoomDetails />} />

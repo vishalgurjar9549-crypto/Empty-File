@@ -70,6 +70,9 @@ router.use(authMiddleware);
 // Query: ?unreadOnly=true to filter
 router.get('/', (req, res, next) => notificationController.getNotifications(req as any, res));
 
+// GET /api/notifications/me - Latest 10 notifications for the current user
+router.get('/me', (req, res, next) => notificationController.getMyNotifications(req as any, res));
+
 // GET /api/notifications/unread - Get unread count (lightweight for polling)
 router.get('/unread', (req, res, next) => notificationController.getUnreadCount(req as any, res));
 

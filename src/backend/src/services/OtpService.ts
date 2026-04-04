@@ -59,9 +59,6 @@ export class OtpService {
       // Calculate expiry
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + this.OTP_EXPIRY_MINUTES);
-      console.log("email:", email)
-      console.log("userId:", userId)
-      
       // Store in DB
       await this.prisma.emailOtp.create({
         data: {

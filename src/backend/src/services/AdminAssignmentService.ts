@@ -1,5 +1,5 @@
 import { getPrismaClient } from '../utils/prisma';
-import { Role } from '@prisma/client';
+import { Role } from "@prisma/client";
 import { logger } from '../utils/logger';
 
 /**

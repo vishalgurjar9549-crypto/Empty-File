@@ -55,4 +55,21 @@ router.delete('/agents/:agentId/tenants/:tenantId', (req, res, next) => adminAss
 // Assignment Lists (for admin dashboard)
 router.get('/assignments/properties', (req, res, next) => adminAssignmentController.getPropertyAssignments(req as any, res));
 router.get('/assignments/tenants', (req, res, next) => adminAssignmentController.getTenantAssignments(req as any, res));
+
+// ============================================================================
+// CONTACT & ENGAGEMENT TRACKING (PROMPTS 1, 2, 3)
+// ============================================================================
+
+// Track contact attempts (when admin sends WhatsApp)
+router.post(
+  '/properties/track-contact',
+  adminController.trackContactAttempt.bind(adminController)
+);
+
+// Track owner login (PROMPT 2)
+router.post('/engagement/track-login', (req, res, next) => adminController.trackOwnerLogin(req as any, res));
+
+// Track property update (PROMPT 2)
+router.post('/engagement/track-property-update', (req, res, next) => adminController.trackPropertyUpdate(req as any, res));
+
 export default router;

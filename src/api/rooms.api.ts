@@ -1,5 +1,5 @@
 import axiosInstance from './axios';
-import { ApiResponse, Room, RoomFilters, CreateRoomInput, UpdateRoomInput, PaginationMeta } from '../types/api.types';
+import { ApiResponse, Room, RoomFilters, CreateRoomInput, UpdateRoomInput, PaginationMeta, DemandStats } from '../types/api.types';
 import { assertValidParam } from '../utils/apiGuard';
 export const roomsApi = {
   // Get all rooms with filters and pagination
@@ -35,6 +35,11 @@ export const roomsApi = {
   getRoomById: async (id: string): Promise<Room> => {
     assertValidParam(id, 'roomId');
     const response = await axiosInstance.get<ApiResponse<Room>>(`/rooms/${id}`);
+    return response.data.data;
+  },
+  getDemandStats: async (id: string): Promise<DemandStats> => {
+    assertValidParam(id, 'roomId');
+    const response = await axiosInstance.get<ApiResponse<DemandStats>>(`/rooms/${id}/demand-stats`);
     return response.data.data;
   },
   // Create new room (owner only)

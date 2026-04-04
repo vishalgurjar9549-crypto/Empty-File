@@ -1,34 +1,24 @@
 import { useMemo, useCallback } from 'react';
-import { Star, MessageCircle, Calendar, ArrowDown } from 'lucide-react';
+import {
+  Star,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  MessageSquareText,
+} from 'lucide-react';
+import { ReviewSkeleton } from './ui/Skeletons';
+import { ErrorState } from './ui/ErrorState';
 import { ReviewDTO } from '../api/reviews.api';
 
-/**
- * 📋 REVIEW LIST COMPONENT
- *
- * Displays reviews in a scrollable list with:
- * - User name
- * - Rating (stars)
- * - Comment text
- * - Relative date (e.g., "2 weeks ago")
- * - Pagination controls
- * - Sorting dropdown (latest, highest, lowest)
- *
- * Props:
- * - reviews: Array of ReviewDTO
- * - total: Total number of reviews
- * - page: Current page
- * - pages: Total pages
- * - loading: Whether loading reviews
- * - sort: Current sort order ('latest' | 'highest' | 'lowest')
- * - onPageChange: Callback for pagination
- * - onSortChange: Callback for sort changes
- */
 interface ReviewListProps {
   reviews: ReviewDTO[];
   total: number;
   page: number;
   pages: number;
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   sort?: 'latest' | 'highest' | 'lowest';
   onPageChange?: (page: number) => void;
   onSortChange?: (sort: 'latest' | 'highest' | 'lowest') => void;
@@ -40,211 +30,273 @@ export function ReviewList({
   page,
   pages,
   loading,
+  error,
+  onRetry,
   sort = 'latest',
   onPageChange,
-  onSortChange
+  onSortChange,
 }: ReviewListProps) {
-  // ✅ Format relative date
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
     const diffWeeks = Math.floor(diffMs / 604800000);
 
+    if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     if (diffWeeks < 4) return `${diffWeeks}w ago`;
+
     return date.toLocaleDateString();
   }, []);
 
-  // ✅ Get sort label
   const getSortLabel = useCallback((sortValue: string) => {
     switch (sortValue) {
-      case 'highest': return '⭐ Highest Rated';
-      case 'lowest': return '⭐ Lowest Rated';
-      default: return '📅 Newest First';
+      case 'highest':
+        return 'Highest Rated';
+      case 'lowest':
+        return 'Lowest Rated';
+      default:
+        return 'Newest First';
     }
   }, []);
 
-  // ✅ Memoize rendered reviews
+  const paginationItems = useMemo(() => {
+    const items: (number | 'ellipsis')[] = [];
+
+    for (let i = 1; i <= pages; i++) {
+      const isVisible =
+        i === 1 || i === pages || Math.abs(i - page) <= 1;
+
+      if (isVisible) {
+        items.push(i);
+      } else {
+        const prev = items[items.length - 1];
+        if (prev !== 'ellipsis') {
+          items.push('ellipsis');
+        }
+      }
+    }
+
+    return items;
+  }, [page, pages]);
+
   const renderedReviews = useMemo(() => {
     return reviews.map((review) => (
-      <div
+      <article
         key={review.id}
-        className="pb-6 border-b border-slate-200 dark:border-slate-700 last:border-b-0"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900 sm:p-6"
       >
-        {/* User info and date */}
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="font-bold text-navy dark:text-white">
-              {review.userMeta?.name || 'Anonymous'}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              {/* Rating stars */}
-              <div className="flex gap-0.5">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${
-                      i < review.rating
-                        ? 'fill-gold text-gold'
-                        : 'text-slate-300 dark:text-slate-600'
-                    }`}
-                  />
-                ))}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          {/* Left */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h4 className="text-base font-semibold text-slate-900 dark:text-white">
+                  {review.userMeta?.name || 'Anonymous'}
+                </h4>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="flex items-center gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`h-4 w-4 ${
+                          i < review.rating
+                            ? 'fill-yellow-400 text-yellow-400'
+                            : 'text-slate-300 dark:text-slate-600'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {review.rating}.0
+                  </span>
+                </div>
               </div>
-              <span className="text-sm font-bold text-navy dark:text-white">
-                {review.rating}
-              </span>
+
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <Calendar className="h-3.5 w-3.5" />
+                {formatDate(review.createdAt)}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {review.comment ? (
+                <p className="text-sm leading-7 text-slate-700 dark:text-slate-300">
+                  {review.comment}
+                </p>
+              ) : (
+                <p className="text-sm italic text-slate-500 dark:text-slate-400">
+                  No additional comment provided.
+                </p>
+              )}
             </div>
           </div>
-
-          {/* Date */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <Calendar className="w-3.5 h-3.5" />
-            {formatDate(review.createdAt)}
-          </div>
         </div>
-
-        {/* Comment */}
-        {review.comment ? (
-          <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-3">
-            {review.comment}
-          </p>
-        ) : (
-          <p className="text-slate-500 dark:text-slate-400 text-sm italic">
-            No additional comment
-          </p>
-        )}
-
-        {/* Helpful counter (future enhancement) */}
-        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer transition-colors">
-          <MessageCircle className="w-3.5 h-3.5" />
-          Helpful?
-        </div>
-      </div>
+      </article>
     ));
   }, [reviews, formatDate]);
 
-  // Show loading state
+  // -----------------------------------
+  // Error State
+  // -----------------------------------
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load reviews"
+        message="We’re having trouble fetching reviews right now. Please try again."
+        onRetry={onRetry}
+        retryLabel="Refresh Reviews"
+      />
+    );
+  }
+
+  // -----------------------------------
+  // Loading State
+  // -----------------------------------
   if (loading && reviews.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 sm:space-y-5">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg animate-pulse">
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-3" />
-            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full mb-2" />
-            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6" />
-          </div>
+          <ReviewSkeleton key={i} />
         ))}
       </div>
     );
   }
 
-  // Show empty state with enhanced messaging
+  // -----------------------------------
+  // Empty State
+  // -----------------------------------
   if (reviews.length === 0) {
     return (
-      <div className="p-8 text-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-700">
-        <Star className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-700 dark:text-slate-300 font-semibold text-lg">
-          Be the first to review this property! ⭐
-        </p>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-          Share your honest experience to help other travelers make the right choice
+      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 px-6 py-10 text-center dark:border-slate-800 dark:from-slate-900 dark:to-slate-800/70 sm:px-8 sm:py-12">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-slate-800">
+          <MessageSquareText className="h-7 w-7 text-slate-400 dark:text-slate-500" />
+        </div>
+
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+          No reviews yet
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Be the first to share your experience and help future renters make better decisions.
         </p>
       </div>
     );
   }
 
   return (
-    <div>
-      {/* Sorting controls */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
-        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-          {total} Review{total !== 1 ? 's' : ''}
+    <section className="space-y-6">
+      {/* Header Toolbar */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Guest Reviews
+          </h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {total} review{total !== 1 ? 's' : ''} from verified experiences
+          </p>
         </div>
 
-        {/* Sort dropdown */}
-        <div className="relative">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="hidden sm:inline">Sort by</span>
+          </div>
+
           <select
             value={sort}
             onChange={(e) => onSortChange?.(e.target.value as 'latest' | 'highest' | 'lowest')}
-            disabled={loading}
-            className="appearance-none px-3 py-1.5 pr-8 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-navy dark:text-white cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-gold/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition-all focus:border-slate-300 focus:ring-4 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-slate-600 dark:focus:ring-slate-700/40"
           >
-            <option value="latest">📅 Newest First</option>
-            <option value="highest">⭐ Highest Rated</option>
-            <option value="lowest">⭐ Lowest Rated</option>
+            <option value="latest">Newest First</option>
+            <option value="highest">Highest Rated</option>
+            <option value="lowest">Lowest Rated</option>
           </select>
-          <ArrowDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
         </div>
       </div>
 
-      {/* Reviews list */}
-      <div className="space-y-6">
-        {renderedReviews}
+      {/* Active Sort Note */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Sorted by <span className="font-medium text-slate-700 dark:text-slate-300">{getSortLabel(sort)}</span>
+        </p>
       </div>
+
+      {/* Reviews */}
+      <div className="space-y-4 sm:space-y-5">{renderedReviews}</div>
 
       {/* Pagination */}
       {pages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-10 pt-8 border-t border-slate-200 dark:border-slate-700">
-          <button
-            onClick={() => onPageChange?.(page - 1)}
-            disabled={page === 1 || loading}
-            className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-navy dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            ← Previous
-          </button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            {/* Range */}
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Showing{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {Math.min((page - 1) * 10 + 1, total)}–{Math.min(page * 10, total)}
+              </span>{' '}
+              of{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {total}
+              </span>
+            </p>
 
-          {/* Page numbers */}
-          <div className="flex gap-1">
-            {[...Array(pages)].map((_, i) => {
-              const pageNum = i + 1;
-              const isActive = pageNum === page;
-              const isVisible = Math.abs(pageNum - page) <= 1 || pageNum === 1 || pageNum === pages;
+            {/* Controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => onPageChange?.(page - 1)}
+                disabled={page === 1 || loading}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Prev
+              </button>
 
-              if (!isVisible) {
-                if (pageNum === 2 || pageNum === pages - 1) {
-                  return <span key={i} className="px-2 text-slate-500">•••</span>;
-                }
-                return null;
-              }
+              <div className="flex items-center gap-1">
+                {paginationItems.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="px-2 text-slate-400 dark:text-slate-500"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => onPageChange?.(item)}
+                      disabled={loading}
+                      className={`h-10 min-w-[40px] rounded-xl px-3 text-sm font-medium transition-all ${
+                        item === page
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+              </div>
 
-              return (
-                <button
-                  key={i}
-                  onClick={() => onPageChange?.(pageNum)}
-                  disabled={loading}
-                  className={`w-8 h-8 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-gold text-white font-bold'
-                      : 'border border-slate-200 dark:border-slate-700 text-navy dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
+              <button
+                onClick={() => onPageChange?.(page + 1)}
+                disabled={page === pages || loading}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-
-          <button
-            onClick={() => onPageChange?.(page + 1)}
-            disabled={page === pages || loading}
-            className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-navy dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Next →
-          </button>
         </div>
       )}
-
-      {/* Review count info */}
-      <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
-        Showing reviews {Math.min((page - 1) * 10 + 1, total)} – {Math.min(page * 10, total)} of {total}
-      </p>
-    </div>
+    </section>
   );
 }

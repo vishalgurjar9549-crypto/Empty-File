@@ -30,6 +30,7 @@ export class NotificationController {
   constructor() {
     // Bind methods to preserve 'this' context
     this.getNotifications = this.getNotifications.bind(this);
+    this.getMyNotifications = this.getMyNotifications.bind(this);
     this.getUnreadCount = this.getUnreadCount.bind(this);
     this.markAsRead = this.markAsRead.bind(this);
     this.markAllAsRead = this.markAllAsRead.bind(this);
@@ -82,6 +83,41 @@ export class NotificationController {
       });
     } catch (error: any) {
       logger.error(`[NotificationController] Error getting notifications:`, error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to get notifications'
+      });
+    }
+  }
+
+  async getMyNotifications(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      const [result, unreadCount] = await Promise.all([
+        notificationService.getNotificationsPaginated(userId, 1, 10, true),
+        notificationService.getUnreadCount(userId)
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        data: result.notifications,
+        meta: {
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+          hasMore: result.hasMore,
+          unreadCount
+        }
+      });
+    } catch (error: any) {
+      logger.error(`[NotificationController] Error getting latest notifications:`, error);
       return res.status(500).json({
         success: false,
         message: 'Failed to get notifications'

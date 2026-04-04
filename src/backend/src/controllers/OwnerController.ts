@@ -7,6 +7,7 @@ export class OwnerController {
     this.getSummary = this.getSummary.bind(this);
     this.getMyRooms = this.getMyRooms.bind(this);
     this.getMyBookings = this.getMyBookings.bind(this);
+    this.getRecentActivity = this.getRecentActivity.bind(this);
   }
 
   /**
@@ -83,6 +84,29 @@ export class OwnerController {
       return res.status(500).json({
         success: false,
         message: error.message || 'Failed to fetch owner bookings'
+      });
+    }
+  }
+
+  async getRecentActivity(req: AuthRequest, res: Response) {
+    try {
+      const ownerId = req.user?.userId;
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        });
+      }
+
+      const activity = await this.ownerService.getOwnerRecentActivity(ownerId);
+      return res.json({
+        success: true,
+        data: activity
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to fetch owner activity'
       });
     }
   }

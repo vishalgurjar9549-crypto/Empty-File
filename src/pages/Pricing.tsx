@@ -5,8 +5,10 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchPricing, fetchCurrentSubscription } from '../store/slices/subscription.slice';
 import { loadCities } from '../store/slices/metadata.slice';
 import { showToast } from '../store/slices/ui.slice';
-import { createOrder, verifyPayment } from '../api/subscription.api';
+import { createOrder, verifyPayment, subscriptionApi } from '../api/subscription.api';
 import { PlanName } from '../types/subscription.types';
+
+const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
 // Razorpay types
 declare global {
   interface Window {
@@ -21,7 +23,7 @@ export default function Pricing() {
   // ✅ FIXED: Robust city initialization - reject undefined/null/empty strings
   const [selectedCity, setSelectedCity] = useState(() => {
     if (urlCity && urlCity !== 'undefined' && urlCity !== 'null' && urlCity.trim() !== '') {
-      return urlCity;
+      return normalizeCityValue(urlCity);
     }
     return 'bangalore'; // Safe default
   });
@@ -59,6 +61,16 @@ export default function Pricing() {
       dispatch(fetchCurrentSubscription());
     }
   }, [dispatch, authStatus]);
+  useEffect(() => {
+    if (!selectedCity || selectedCity === 'undefined' || selectedCity === 'null' || selectedCity.trim() === '') {
+      return;
+    }
+    void subscriptionApi.trackConversionEvent({
+      type: 'PLAN_VIEW',
+      city: selectedCity,
+      source: 'pricing_page'
+    }).catch(() => undefined);
+  }, [selectedCity]);
   // Load Razorpay script
   useEffect(() => {
     const script = document.createElement('script');
@@ -100,18 +112,21 @@ export default function Pricing() {
       }));
       return;
     }
+    void subscriptionApi.trackConversionEvent({
+      type: 'PLAN_PURCHASE_CLICK',
+      city: selectedCity,
+      plan,
+      source: 'pricing_page'
+    }).catch(() => undefined);
     setProcessingPlan(plan);
     try {
-      console.log('Creating Razorpay order...', {
-        plan,
-        city: selectedCity
-      });
+      
       // ✅ CORRECT PAYLOAD: Only plan and city (backend calculates amount)
       const orderData = await createOrder({
         plan,
         city: selectedCity
       });
-      console.log('Razorpay order created:', orderData);
+      
       // Step 2: Open Razorpay checkout
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -121,7 +136,7 @@ export default function Pricing() {
         description: `${plan} Plan - ${selectedCity}`,
         order_id: orderData.orderId,
         handler: async function (response: any) {
-          console.log('Payment successful:', response);
+          
           try {
             // Step 3: Verify payment — this also upgrades subscription atomically
             const verifyResult = await verifyPayment({
@@ -149,7 +164,7 @@ export default function Pricing() {
         },
         modal: {
           ondismiss: function () {
-            console.log('Payment cancelled by user');
+            
             setProcessingPlan(null);
             dispatch(showToast({
               message: 'Payment cancelled',
@@ -233,11 +248,18 @@ export default function Pricing() {
             <MapPin className="w-4 h-4 text-gold" />
             <select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} className="bg-transparent text-navy dark:text-white font-semibold text-base outline-none cursor-pointer">
 
-              {cities.map((city) => <option key={city.id} value={city.id} className="dark:bg-slate-800">
+              {cities.map((city) => <option key={city.id} value={normalizeCityValue(city.name)} className="dark:bg-slate-800">
 
                   {city.name}
                 </option>)}
-            </select>
+              </select>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {['Contact multiple owners', 'High-demand verified listings', 'Instant phone access'].map((item) => <div key={item} className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm">
+                <Check className="w-4 h-4 text-gold" />
+                <span>{item}</span>
+              </div>)}
           </div>
         </div>
 
@@ -300,7 +322,7 @@ export default function Pricing() {
                     </div>
 
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 pb-6 border-b border-slate-100 dark:border-slate-700">
-                      {plan.price === 0 ? 'Perfect to get started' : `Full access in ${cities.find((c) => c.id === selectedCity)?.name || selectedCity}`}
+                      {plan.price === 0 ? 'Perfect to get started' : `Full access in ${selectedCityLabel}`}
                     </p>
 
                     {/* Features */}

@@ -8,7 +8,9 @@ export interface CurrentSubscription {
   price: number;
   expiresAt?: string;
   viewCount?: number;
-  viewLimit?: number;
+  viewLimit?: number | null;
+  planActive?: boolean;
+  isUnlocked?: boolean;
 }
 export interface SubscriptionPlan {
   plan: PlanName;
@@ -34,7 +36,9 @@ export interface VisibilityResponse {
   plan: PlanName;
   message?: string;
   viewCount?: number;
-  viewLimit?: number;
+  viewLimit?: number | null;
+  planActive?: boolean;
+  isUnlocked?: boolean;
 }
 export interface TrackViewInput {
   propertyId: string;

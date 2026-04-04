@@ -4,16 +4,19 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { upgradeSubscription, fetchPricing, clearPricing } from '../store/slices/subscription.slice';
 import { showToast } from '../store/slices/ui.slice';
 import axiosInstance from '../api/axios';
+import { subscriptionApi } from '../api/subscription.api';
 import { Button } from './ui/Button';
 interface SubscriptionUpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   city: string;
   currentPlan: string;
+  propertyId?: string;
   roomTitle?: string;
   roomPrice?: number;
   viewCount?: number;
   viewLimit?: number | null;
+  todayContacts?: number;
 }
 const PLAN_NAMES = {
   GOLD: 'Gold',
@@ -26,10 +29,12 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
   onClose,
   city,
   currentPlan,
+  propertyId,
   roomTitle,
   roomPrice,
   viewCount,
-  viewLimit
+  viewLimit,
+  todayContacts = 0
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -41,7 +46,7 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
     loading: subscriptionLoading,
     error: subscriptionError
   } = useAppSelector((state) => state.subscription);
-  console.log('city', city);
+  
   const [selectedPlan, setSelectedPlan] = useState<'GOLD' | 'PLATINUM'>('GOLD');
   const [isProcessing, setIsProcessing] = useState(false);
   // ─── FIX 1: Normalize city ONCE at the top ────────────────────────────
@@ -88,6 +93,15 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
       dispatch(fetchPricing(normalizedCity));
     }
   }, [isOpen, normalizedCity, pricingCity, dispatch]);
+  useEffect(() => {
+    if (!isOpen) return;
+    void subscriptionApi.trackConversionEvent({
+      type: 'PLAN_VIEW',
+      propertyId,
+      city: normalizedCity || city,
+      source: roomTitle ? 'property_upgrade_modal' : 'subscription_upgrade_modal'
+    }).catch(() => undefined);
+  }, [isOpen, propertyId, normalizedCity, city, roomTitle]);
   if (!isOpen) return null;
   // ─── FIX 3: Derive prices — ONLY from city-matched pricing ───────────
   const isCityMatch = pricingCity === normalizedCity;
@@ -105,6 +119,7 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
   const isFree = currentPlan === 'FREE';
   const isUnlimitedPlan = viewLimit === null || viewLimit === undefined;
   const remaining = isFree && !isUnlimitedPlan && viewLimit != null && viewCount != null ? Math.max(0, viewLimit - viewCount) : null;
+  const displayTodayContacts = Math.max(1, todayContacts || 0);
   // Calculate brokerage savings anchor
   const brokerageSavings = roomPrice ? Math.round(roomPrice * 0.5) : 15000;
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -133,6 +148,13 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
         setIsProcessing(false);
         return;
       }
+      void subscriptionApi.trackConversionEvent({
+        type: 'PLAN_PURCHASE_CLICK',
+        propertyId,
+        city: normalizedCity,
+        plan: selectedPlan,
+        source: roomTitle ? 'property_upgrade_modal' : 'subscription_upgrade_modal'
+      }).catch(() => undefined);
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         dispatch(showToast({
@@ -283,15 +305,30 @@ export const SubscriptionUpgradeModal: React.FC<SubscriptionUpgradeModalProps> =
             Plans for {cityDisplayName}
           </p>
 
+          {todayContacts > 2 && <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg">
+              <Zap className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+              <p className="text-sm text-rose-800 dark:text-rose-300">
+                🔥 This property is getting contacted frequently. Don&apos;t miss
+                out — unlock now.
+              </p>
+            </div>}
+
           {/* Remaining unlocks — ONLY for FREE plan */}
           {remaining !== null && isFree && <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
               <Eye className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                You have <span className="font-bold">{remaining}</span> free
-                unlock{remaining !== 1 ? 's' : ''} remaining in{' '}
-                {cityDisplayName}
-              </p>
+              {remaining > 0 ? <p className="text-sm text-amber-800 dark:text-amber-300">
+                  You have <span className="font-bold">{remaining}</span> free
+                  unlock{remaining !== 1 ? 's' : ''} remaining in{' '}
+                  {cityDisplayName}
+                </p> : <p className="text-sm text-amber-800 dark:text-amber-300">
+                  🚀 You&apos;ve used your free contacts. This property is in
+                  demand — unlock more to continue.
+                </p>}
             </div>}
+
+          {todayContacts > 2 && <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              🔥 {displayTodayContacts} people already contacted this owner.
+            </p>}
 
           {/* Loading state with city-specific message */}
           {isPricingLoading && <div className="mb-4 text-center py-2">

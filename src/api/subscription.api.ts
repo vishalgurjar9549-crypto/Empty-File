@@ -26,6 +26,13 @@ export interface VerifyPaymentResponse {
     subscription: any;
   };
 }
+export interface TrackConversionEventRequest {
+  type: 'PLAN_VIEW' | 'PLAN_PURCHASE_CLICK';
+  propertyId?: string;
+  city?: string;
+  plan?: string;
+  source?: string;
+}
 const BASE = '/tenant-subscriptions';
 
 /**
@@ -95,6 +102,12 @@ export const trackPropertyView = async (data: {
   await axios.post(`${BASE}/track-view`, data);
 };
 
+export const trackConversionEvent = async (
+  data: TrackConversionEventRequest,
+): Promise<void> => {
+  await axios.post(`${BASE}/track-conversion`, data);
+};
+
 /**
  * Check property visibility (access control)
  */
@@ -152,6 +165,7 @@ export const subscriptionApi = {
   upgrade: upgradeSubscription,
   verifyPayment,
   trackView: trackPropertyView,
+  trackConversionEvent,
   getVisibility: checkPropertyVisibility,
   checkAccess,
   getSubscriptionByCity

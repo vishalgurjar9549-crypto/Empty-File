@@ -15,6 +15,7 @@ import { env } from "./config/env";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./swagger";
 import { getPrismaClient } from "./utils/prisma";
+import { OwnerDailyNudgeService } from "./services/OwnerDailyNudgeService";
 
 // ── Passport Config ───────────────────────────────────
 import "./config/passport.config";
@@ -82,6 +83,7 @@ app.use(errorHandler);
    ✅ DATABASE WARMUP (BIG PERFORMANCE BOOST)
 ===================================================== */
 const prisma = getPrismaClient();
+const ownerDailyNudgeService = new OwnerDailyNudgeService();
 
 async function warmupDatabase() {
   try {
@@ -102,6 +104,7 @@ app.listen(PORT, async () => {
   logger.info(`Environment: ${env.NODE_ENV}`);
 
   await warmupDatabase();
+  ownerDailyNudgeService.start();
 });
 
 export default app;

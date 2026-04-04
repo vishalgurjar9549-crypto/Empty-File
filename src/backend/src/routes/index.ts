@@ -34,7 +34,7 @@ router.use('/cloudinary', cloudinaryRoutes);
 router.use('/contacts', contactRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/favorites', favoritesRoutes);
-
+console.log("ROUTES FILE LOADED");
 // Property Notes Routes
 // POST/GET /api/properties/:propertyId/notes
 router.use('/properties/:propertyId/notes', propertyNotesRouter);

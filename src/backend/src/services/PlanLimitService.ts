@@ -8,19 +8,31 @@ import { normalizeCity } from '../utils/normalize';
  *
  * Resolution priority:
  * 1. City-specific override: (plan='FREE', city='bangalore') → 5
- * 2. Global plan default:   (plan='FREE', city=NULL)         → 10
- * 3. Hardcoded safety net:  FREE → 10 (only if DB has no rows)
+ * 2. Global plan default:   (plan='FREE', city=NULL)         → 5
+ * 3. Hardcoded safety net:  FREE → 5 (only if DB has no rows)
  *
  * Returns:
  * - number: the contact limit for this plan+city
  * - null:   unlimited (paid plans)
  */
 
-const FALLBACK_FREE_LIMIT = 10;
+export const FALLBACK_FREE_LIMIT = Number(process.env.FREE_CONTACT_LIMIT || 5);
 export class PlanLimitService {
   private prisma: PrismaClient;
   constructor(prismaClient?: PrismaClient) {
     this.prisma = prismaClient || getPrismaClient();
+  }
+
+  private normalizeFreeLimit(plan: string, limit: number | null): number | null {
+    if (plan !== 'FREE') {
+      return limit;
+    }
+
+    if (typeof limit !== 'number' || Number.isNaN(limit)) {
+      return FALLBACK_FREE_LIMIT;
+    }
+
+    return Math.min(limit, FALLBACK_FREE_LIMIT);
   }
 
   /**
@@ -49,7 +61,7 @@ export class PlanLimitService {
           city: normalizedCity,
           contactLimit: cityOverride.contactLimit
         });
-        return cityOverride.contactLimit; // null = unlimited
+        return this.normalizeFreeLimit(normalizedPlan, cityOverride.contactLimit);
       }
 
       // 2. Check global plan default (city = null)
@@ -65,7 +77,7 @@ export class PlanLimitService {
           plan: normalizedPlan,
           contactLimit: globalDefault.contactLimit
         });
-        return globalDefault.contactLimit; // null = unlimited
+        return this.normalizeFreeLimit(normalizedPlan, globalDefault.contactLimit);
       }
 
       // 3. Hardcoded safety fallback (only if DB has no config at all)
@@ -74,7 +86,7 @@ export class PlanLimitService {
         city: normalizedCity
       });
       if (normalizedPlan === 'FREE') {
-        return FALLBACK_FREE_LIMIT;
+        return this.normalizeFreeLimit(normalizedPlan, FALLBACK_FREE_LIMIT);
       }
 
       // Paid plans default to unlimited if no DB config
@@ -87,7 +99,9 @@ export class PlanLimitService {
       });
 
       // Safety: if DB is down, FREE gets hardcoded limit, paid gets unlimited
-      return normalizedPlan === 'FREE' ? FALLBACK_FREE_LIMIT : null;
+      return normalizedPlan === 'FREE'
+        ? this.normalizeFreeLimit(normalizedPlan, FALLBACK_FREE_LIMIT)
+        : null;
     }
   }
 }

@@ -63,11 +63,15 @@ export const UpgradeOwnerModal = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={handleBackdropClick}>
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="upgrade-owner-title"
+      onClick={handleBackdropClick}
+    >
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 relative">
         {/* Icon */}
-        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/30 mx-auto mb-5">
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/30 mx-auto mb-5" aria-hidden="true">
           <svg
             className="w-7 h-7 text-blue-600 dark:text-blue-400"
             fill="none"
@@ -84,7 +88,7 @@ export const UpgradeOwnerModal = ({
         </div>
 
         {/* Title */}
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white text-center mb-2">
+        <h2 id="upgrade-owner-title" className="text-xl font-semibold text-gray-900 dark:text-white text-center mb-2">
           Start listing your property
         </h2>
 

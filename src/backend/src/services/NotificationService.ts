@@ -65,7 +65,9 @@ export const NotificationType = {
   AGENT_PROPERTY_UNASSIGNED: 'AGENT_PROPERTY_UNASSIGNED' as PrismaNotificationType,
   AGENT_TENANT_ASSIGNED: 'AGENT_TENANT_ASSIGNED' as PrismaNotificationType,
   AGENT_TENANT_UNASSIGNED: 'AGENT_TENANT_UNASSIGNED' as PrismaNotificationType,
-  PROPERTY_NOTE_CREATED: 'PROPERTY_NOTE_CREATED' as PrismaNotificationType
+  PROPERTY_NOTE_CREATED: 'PROPERTY_NOTE_CREATED' as PrismaNotificationType,
+  OWNER_ACTIVITY: 'OWNER_ACTIVITY' as PrismaNotificationType,
+  OWNER_CONTACT_INTEREST: 'OWNER_CONTACT_INTEREST' as PrismaNotificationType
 } as const;
 export type NotificationType = PrismaNotificationType;
 
@@ -106,6 +108,8 @@ export interface NotificationPayload {
   assignmentId?: string;
   assignmentNotes?: string;
   reason?: string;
+  timestamp?: string;
+  eventType?: string;
 }
 export interface CreateNotificationInput {
   recipientId: string;
@@ -155,6 +159,8 @@ export class NotificationService {
     this.onAgentTenantAssigned = this.onAgentTenantAssigned.bind(this);
     this.onAgentTenantUnassigned = this.onAgentTenantUnassigned.bind(this);
     this.onPropertyNoteCreated = this.onPropertyNoteCreated.bind(this);
+    this.onOwnerActivity = this.onOwnerActivity.bind(this);
+    this.onOwnerContactInterest = this.onOwnerContactInterest.bind(this);
   }
 
   // ==========================================================================
@@ -449,6 +455,45 @@ export class NotificationService {
       readAt: notification.readAt,
       createdAt: notification.createdAt
     };
+  }
+
+  async onOwnerActivity(data: {
+    ownerId: string;
+    propertyId: string;
+    propertyTitle: string;
+    eventType: 'PROPERTY_VIEW' | 'CONTACT_UNLOCK' | 'CONTACT_ACCESS';
+    timestamp: string;
+  }): Promise<void> {
+    const message =
+      data.eventType === 'PROPERTY_VIEW'
+        ? '🔥 Someone viewed your property'
+        : data.eventType === 'CONTACT_UNLOCK'
+        ? '📞 Someone unlocked your contact'
+        : '📞 Someone revisited your contact details';
+
+    await this.emit({
+      recipientId: data.ownerId,
+      type: NotificationType.OWNER_ACTIVITY,
+      title: 'New Activity',
+      message,
+      payload: {
+        propertyId: data.propertyId,
+        propertyTitle: data.propertyTitle,
+        timestamp: data.timestamp,
+        eventType: data.eventType
+      },
+      referenceId: `${data.eventType}:${data.propertyId}:${data.timestamp}`
+    });
+  }
+
+  async onOwnerContactInterest(data: {
+    ownerId: string;
+    propertyId: string;
+    propertyTitle: string;
+    eventType: 'CONTACT_UNLOCK' | 'CONTACT_ACCESS';
+    timestamp: string;
+  }): Promise<void> {
+    await this.onOwnerActivity(data);
   }
 
   // ==========================================================================

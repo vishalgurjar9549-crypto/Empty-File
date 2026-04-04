@@ -1,5 +1,7 @@
 import { PrismaRoomRepository } from '../repositories/PrismaRoomRepository';
 import { PrismaBookingRepository } from '../repositories/PrismaBookingRepository';
+import { EventType } from '@prisma/client';
+import { getPrismaClient } from '../utils/prisma';
 export class OwnerService {
   private roomRepository: PrismaRoomRepository;
   private bookingRepository: PrismaBookingRepository;
@@ -48,5 +50,42 @@ export class OwnerService {
   async getOwnerBookings(ownerId: string) {
     const result = await this.bookingRepository.findByOwnerId(ownerId);
     return result.bookings;
+  }
+
+  async getOwnerRecentActivity(ownerId: string) {
+    const prisma = getPrismaClient();
+
+    const events = await prisma.event.findMany({
+      where: {
+        property: {
+          is: {
+            ownerId
+          }
+        },
+        type: {
+          in: [EventType.PROPERTY_VIEW, EventType.CONTACT_UNLOCK, EventType.CONTACT_ACCESS]
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 5,
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true
+          }
+        }
+      }
+    });
+
+    return events.map((event) => ({
+      id: event.id,
+      type: event.type,
+      propertyId: event.propertyId || '',
+      propertyTitle: event.property?.title || 'Your property',
+      createdAt: event.createdAt.toISOString()
+    }));
   }
 }

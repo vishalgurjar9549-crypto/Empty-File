@@ -1,14 +1,18 @@
 import { Response } from 'express';
+import { EventType } from '@prisma/client';
 import { TenantSubscriptionService } from '../services/TenantSubscriptionService';
-import { PlanLimitService } from '../services/PlanLimitService';
+import { DemandService } from '../services/DemandService';
+import { FALLBACK_FREE_LIMIT, PlanLimitService } from '../services/PlanLimitService';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logger } from '../utils/logger';
 import { normalizeCity } from '../utils/normalize';
 import { getPrismaClient } from '../utils/prisma';
 export class TenantSubscriptionController {
   private planLimitService: PlanLimitService;
+  private demandService: DemandService;
   constructor(private subscriptionService: TenantSubscriptionService, planLimitService?: PlanLimitService) {
     this.planLimitService = planLimitService || new PlanLimitService();
+    this.demandService = new DemandService();
     // Bind all methods to preserve 'this' context
     this.getCurrent = this.getCurrent.bind(this);
     this.getPricing = this.getPricing.bind(this);
@@ -16,6 +20,7 @@ export class TenantSubscriptionController {
     this.upgrade = this.upgrade.bind(this);
     this.verifyPayment = this.verifyPayment.bind(this);
     this.trackView = this.trackView.bind(this);
+    this.trackConversionEvent = this.trackConversionEvent.bind(this);
     this.getVisibility = this.getVisibility.bind(this);
   }
 
@@ -42,10 +47,11 @@ export class TenantSubscriptionController {
             plan: 'FREE',
             city: null,
             viewCount: 0,
-            viewLimit: 10,
+            viewLimit: FALLBACK_FREE_LIMIT,
             canViewContact: false,
             canViewMap: false,
-            hasCallSupport: false
+            hasCallSupport: false,
+            planActive: false,
           }
         });
       }
@@ -303,6 +309,53 @@ export class TenantSubscriptionController {
     }
   }
 
+  async trackConversionEvent(req: AuthRequest, res: Response) {
+    try {
+      const { type, propertyId, city, plan, source } = req.body || {};
+
+      if (type !== EventType.PLAN_VIEW && type !== EventType.PLAN_PURCHASE_CLICK) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid conversion event type',
+        });
+      }
+
+      const metadata: Record<string, string | number | boolean> = {};
+
+      if (typeof city === 'string' && city.trim().length > 0) {
+        metadata.city = normalizeCity(city);
+      }
+
+      if (typeof plan === 'string' && plan.trim().length > 0) {
+        metadata.plan = plan.toUpperCase();
+      }
+
+      if (typeof source === 'string' && source.trim().length > 0) {
+        metadata.source = source;
+      }
+
+      await this.demandService.recordEvent({
+        type,
+        propertyId: typeof propertyId === 'string' && propertyId.trim().length > 0 ? propertyId : null,
+        userId: req.user?.userId ?? null,
+        metadata,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Conversion event tracked',
+      });
+    } catch (error: any) {
+      logger.error('Error in trackConversionEvent', {
+        error: error.message,
+      });
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
   /**
    * GET /visibility?city=bangalore&roomId=123 - Check access permissions
    * ✅ FIXED: Uses database-driven PlanLimitService instead of hardcoded 10
@@ -374,6 +427,7 @@ export class TenantSubscriptionController {
           canViewContact,
           canViewMap,
           hasCallSupport,
+          planActive: effectivePlan !== 'FREE',
           isUnlocked,
           message: !isUnlimited && viewCount >= limit ? 'Upgrade to view more properties' : null
         }
