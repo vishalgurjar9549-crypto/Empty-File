@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { CityPillSkeleton } from "./ui/SkeletonLoader";
 
 type BackendCity = {
   id: string | number;
@@ -20,108 +21,12 @@ type CityItem = {
 
 type PopularCitiesScrollerProps = {
   cities?: BackendCity[];
+  isLoading?: boolean;
 };
 
-const DEMO_CITIES: CityItem[] = [
-  {
-    id: "agra",
-    name: "Agra",
-    state: "Uttar Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "almaty",
-    name: "Almaty",
-    state: "Kazakhstan",
-    image:
-      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "azerbaijan",
-    name: "Azerbaijan",
-    state: "Baku",
-    image:
-      "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "bangalore",
-    name: "Bangalore",
-    state: "Karnataka",
-    image:
-      "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "barot",
-    name: "Barot",
-    state: "Himachal Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "bir",
-    name: "Bir",
-    state: "Himachal Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "burwa",
-    name: "Burwa",
-    state: "Himachal Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "alleppey",
-    name: "Alleppey",
-    state: "Kerala",
-    image:
-      "https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "andamans",
-    name: "Andamans",
-    state: "Andaman & Nicobar",
-    image:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "bali",
-    name: "Bali",
-    state: "Indonesia",
-    image:
-      "https://images.unsplash.com/photo-1537996194471-e657df975ab4?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "banikhet",
-    name: "Banikhet",
-    state: "Himachal Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "bhor",
-    name: "Bhor",
-    state: "Maharashtra",
-    image:
-      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "bundi",
-    name: "Bundi",
-    state: "Rajasthan",
-    image:
-      "https://images.unsplash.com/photo-1477587458883-47145ed94245?q=80&w=1200&auto=format&fit=crop",
-  },
-  {
-    id: "chamba",
-    name: "Chamba",
-    state: "Himachal Pradesh",
-    image:
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
-  },
-];
+// ✅ STEP 2: REMOVED DEMO_CITIES
+// Show empty state instead of fake data
+// "No listings yet — be the first to explore"
 
 function chunkIntoTwoRows(items: CityItem[]) {
   const row1: CityItem[] = [];
@@ -135,29 +40,19 @@ function chunkIntoTwoRows(items: CityItem[]) {
   return [row1, row2];
 }
 
-function mergeCitiesWithFallback(cities?: BackendCity[]): CityItem[] {
+function mergeCitiesWithoutFallback(cities?: BackendCity[]): CityItem[] {
+  // ✅ STEP 2: NO FALLBACK TO FAKE DATA
+  // Use only real backend data
   const backendCities: CityItem[] =
     cities?.map((city, index) => ({
       id: city.id ?? city.name ?? `city-${index}`,
       name: city.name,
       state: city.state || "Popular destination",
       totalListings: city.totalListings,
-      image:
-        city.image ||
-        DEMO_CITIES[index % DEMO_CITIES.length]?.image ||
-        DEMO_CITIES[0].image,
+      image: city.image || "", // Empty string if no image
     })) ?? [];
 
-  const existingNames = new Set(
-    backendCities.map((city) => city.name.trim().toLowerCase())
-  );
-
-  const fallbackCities = DEMO_CITIES.filter(
-    (city) => !existingNames.has(city.name.trim().toLowerCase())
-  );
-
-  // Keep enough items so marquee looks full
-  return [...backendCities, ...fallbackCities].slice(0, 16);
+  return backendCities;
 }
 
 function CityPill({ city }: { city: CityItem }) {
@@ -226,11 +121,13 @@ function InfiniteRow({
 
 export default function PopularCitiesScroller({
   cities,
+  isLoading = false,
 }: PopularCitiesScrollerProps) {
   const row1Ref = useRef<HTMLDivElement>(null);
   const row2Ref = useRef<HTMLDivElement>(null);
 
-  const mergedCities = useMemo(() => mergeCitiesWithFallback(cities), [cities]);
+  // ✅ STEP 2: Use real data only, no fallback to DEMO_CITIES
+  const mergedCities = useMemo(() => mergeCitiesWithoutFallback(cities), [cities]);
 
   const [row1, row2] = useMemo(
     () => chunkIntoTwoRows(mergedCities),
@@ -256,15 +153,73 @@ export default function PopularCitiesScroller({
     });
   };
 
-  return (
-    <section className="relative overflow-hidden py-8  bg-white dark:bg-[#050505]">
-      {/* side fade */}
-      {/* <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 sm:w-24 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 sm:w-24 bg-gradient-to-l from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" /> */}
+  // ✅ STEP 1: Show loading skeleton
+  if (isLoading) {
+    return (
+      <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
+        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 flex items-end justify-between gap-4">
+            <div>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 animate-pulse">
+                Loading...
+              </span>
+              <div className="mt-4 h-12 w-1/3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            </div>
+          </div>
 
+          <div className="space-y-8">
+            <div className="flex gap-5 sm:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <CityPillSkeleton key={i} />
+              ))}
+            </div>
+            <div className="flex gap-5 sm:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <CityPillSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // ✅ STEP 7: Empty state if no cities
+  if (!mergedCities || mergedCities.length === 0) {
+    return (
+      <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
+        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 flex items-end justify-between gap-4">
+            <div>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
+                Explore destinations
+              </span>
+
+              <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Popular Cities to Live In
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-sm sm:text-base lg:text-lg leading-relaxed text-slate-600 dark:text-zinc-400">
+                No listings yet — be the first to explore
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200/50 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/30 p-8 text-center">
+            <p className="text-slate-600 dark:text-slate-400">
+              Cities will be available soon
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
       <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
         {/* Heading */}
-        <div className="mb-10  flex items-end justify-between gap-4">
+        <div className="mb-10 flex items-end justify-between gap-4">
           <div>
             <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
               Explore destinations
@@ -303,16 +258,16 @@ export default function PopularCitiesScroller({
         </div>
 
         {/* Rows */}
-    <div className="relative">
-  {/* side fade only for slider */}
-  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 sm:w-24 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" />
-  <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 sm:w-24 bg-gradient-to-l from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" />
+        <div className="relative">
+          {/* side fade only for slider */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 sm:w-24 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 sm:w-24 bg-gradient-to-l from-white via-white/90 to-transparent dark:from-[#050505] dark:via-[#050505]/90 dark:to-transparent" />
 
-  <div className="space-y-8">
-    <InfiniteRow items={row1} direction="left" rowRef={row1Ref} />
-    <InfiniteRow items={row2} direction="right" rowRef={row2Ref} />
-  </div>
-</div>
+          <div className="space-y-8">
+            <InfiniteRow items={row1} direction="left" rowRef={row1Ref} />
+            <InfiniteRow items={row2} direction="right" rowRef={row2Ref} />
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -15,8 +15,8 @@ export function About() {
           <p className="text-lg leading-relaxed mb-6 text-slate-600 dark:text-slate-300">
             Founded in 2024, we started with a simple mission: to provide safe,
             comfortable, and community-driven living spaces that feel like home.
-            Today, we manage over 500+ properties across 5 major cities, serving
-            thousands of happy residents.
+            Today, we manage properties across multiple cities, serving thousands
+            of happy residents nationwide.
           </p>
           <h3 className="text-xl font-bold text-navy dark:text-white mt-8 mb-4">
             Our Promise

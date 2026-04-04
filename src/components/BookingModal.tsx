@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { createBooking } from '../store/slices/bookings.slice';
+import { showToast } from '../store/slices/ui.slice';
 import { generateIdempotencyKey } from '../api/bookings.api';
 import { Room } from '../types/api.types';
 import { Button } from './ui/Button';
@@ -227,11 +228,29 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
       idempotencyKey,
     };
 
-    const action = await dispatch(createBooking(bookingData));
+    try {
+      const action = await dispatch(createBooking(bookingData));
 
-    if (createBooking.fulfilled.match(action)) {
-      setIdempotencyKey(generateIdempotencyKey());
-      setStep('success');
+      if (createBooking.fulfilled.match(action)) {
+        setIdempotencyKey(generateIdempotencyKey());
+        setStep('success');
+        dispatch(showToast({
+          message: 'Booking request sent successfully!',
+          type: 'success'
+        }));
+      } else if (createBooking.rejected.match(action)) {
+        const errorMsg = (action.payload as any)?.message || 'Failed to create booking. Please try again.';
+        dispatch(showToast({
+          message: errorMsg,
+          type: 'error'
+        }));
+      }
+    } catch (error: any) {
+      const errorMsg = error?.message || 'An unexpected error occurred. Please try again.';
+      dispatch(showToast({
+        message: errorMsg,
+        type: 'error'
+      }));
     }
   };
 

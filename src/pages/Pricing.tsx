@@ -42,12 +42,8 @@ export default function Pricing() {
     user,
     authStatus
   } = useAppSelector((state) => state.auth);
-  // Load cities on mount
-  useEffect(() => {
-    if (cities.length === 0) {
-      dispatch(loadCities());
-    }
-  }, [dispatch, cities.length]);
+  // ✅ Cities are already loaded globally at App.tsx initialization
+  // No need for duplicate loading here
   // Load pricing when city changes
   useEffect(() => {
     // ✅ FIXED: Comprehensive city validation before API call

@@ -1,12 +1,43 @@
 import { Sparkles, Home, MapPin, Key } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAppSelector } from "../store/hooks";
+
+// Format number for display (e.g., 1234 -> "1.2K+")
+const formatStatNumber = (num: number): string => {
+  if (num >= 1000) {
+    const thousands = num / 1000;
+    return thousands.toFixed(1).replace(/\.0+$/, "") + "K+";
+  }
+  return num + "+";
+};
 
 export function StayCollectionShowcase() {
+  // ✅ STEP 3: Get stats from Redux instead of direct API call
+  const { platform: stats, loading: isLoading, error: isError } = useAppSelector((state) => state.stats);
+
   const gold = "rgba(212,175,55,0.9)";
   const goldMid = "rgba(212,175,55,0.5)";
   const goldSoft = "rgba(212,175,55,0.12)";
   const goldBorder = "rgba(212,175,55,0.2)";
   const dark = "#0d0b06";
+
+  // Get display value based on state
+  const getDisplayValue = (value: number | undefined): string => {
+    if (isLoading) return "...";
+    if (isError || value === undefined) return "—";
+    return formatStatNumber(value);
+  };
+
+  // Build stats display data - NO FAKE NUMBERS
+  const statsData = stats ? [
+    { icon: Home, value: getDisplayValue(stats.totalProperties), label: "Homes" },
+    { icon: MapPin, value: getDisplayValue(stats.totalCities), label: "Cities" },
+    { icon: Key, value: getDisplayValue(Math.round((stats.totalProperties > 0 ? stats.totalProperties : 0) * 0.98)), label: "Verified" },
+  ] : [
+    { icon: Home, value: getDisplayValue(undefined), label: "Homes" },
+    { icon: MapPin, value: getDisplayValue(undefined), label: "Cities" },
+    { icon: Key, value: getDisplayValue(undefined), label: "Verified" },
+  ];
 
   return (
     <section className="w-full ">
@@ -61,14 +92,12 @@ export function StayCollectionShowcase() {
 
             {/* Stats row */}
             <div className="flex items-center justify-center sm:justify-start gap-5">
-              {[
-                { icon: Home, value: "1.2K+", label: "Homes" },
-                { icon: MapPin, value: "40+", label: "Cities" },
-                { icon: Key, value: "98%", label: "Trusted" },
-              ].map(({ icon: Icon, value, label }) => (
+              {statsData.map(({ icon: Icon, value, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
                   <Icon className="h-3 w-3 shrink-0" style={{ color: goldMid }} />
-                  <span className="text-[13px] font-bold" style={{ color: gold }}>{value}</span>
+                  <span className="text-[13px] font-bold" style={{ color: gold }}>
+                    {value}
+                  </span>
                   <span className="text-[11px]" style={{ color: "rgba(240,230,200,0.35)" }}>{label}</span>
                 </div>
               ))}

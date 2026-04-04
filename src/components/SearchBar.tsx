@@ -407,11 +407,8 @@ export function SearchBar() {
   const [roomType, setRoomType] = useState("");
   const [budget, setBudget] = useState("");
 
-  useEffect(() => {
-    if (cities.length === 0) {
-      dispatch(loadCities());
-    }
-  }, [dispatch, cities.length]);
+  // ✅ REMOVED: Cities are loaded at App level via useInitializeAppData
+  // No need to fetch again here - just consume from Redux state
 
   const cityOptions: Option[] = useMemo(() => {
     return cities

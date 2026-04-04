@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchAssignedProperties, fetchAssignedTenants, fetchNotifications, markNotificationAsRead, markAllNotificationsAsRead, createPropertyNote, updatePropertyNote, deletePropertyNote } from '../../store/slices/agent.slice';
+import { showToast } from '../../store/slices/ui.slice';
 import { Building, Users, Bell, MapPin, Calendar, Phone, Mail, CheckCircle, Clock, AlertCircle, RefreshCw, FileText, Plus, Edit2, Trash2 } from 'lucide-react';
 import { PropertyNoteModal } from '../../components/agent/PropertyNoteModal';
 import { DeleteNoteConfirmModal } from '../../components/agent/DeleteNoteConfirmModal';
@@ -142,6 +143,10 @@ export function AgentDashboard() {
             content,
           })
         ).unwrap();
+        dispatch(showToast({
+          message: 'Note updated successfully!',
+          type: 'success'
+        }));
       } else {
         await dispatch(
           createPropertyNote({
@@ -149,11 +154,20 @@ export function AgentDashboard() {
             content,
           })
         ).unwrap();
+        dispatch(showToast({
+          message: 'Note created successfully!',
+          type: 'success'
+        }));
       }
 
       resetNoteState();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save note:', err);
+      const errorMessage = err?.message || 'Failed to save note. Please try again.';
+      dispatch(showToast({
+        message: errorMessage,
+        type: 'error'
+      }));
     } finally {
       setIsSubmitting(false);
     }

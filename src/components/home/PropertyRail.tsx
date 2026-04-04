@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowRight, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PropertyRailCard } from "./PropertyRailCard";
 import { PropertyRailSkeleton } from "./PropertyRailSkeleton";
@@ -24,6 +24,8 @@ type PropertyRailProps = {
   subtitle?: string;
   properties: Property[];
   loading?: boolean;
+  empty?: boolean;
+  error?: boolean;
   viewAllLink?: string;
 };
 
@@ -32,6 +34,8 @@ export function PropertyRail({
   subtitle,
   properties,
   loading = false,
+  empty = false,
+  error = false,
   viewAllLink = "/rooms",
 }: PropertyRailProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -55,6 +59,68 @@ export function PropertyRail({
 
   const visibleProperties = properties.slice(0, 5);
   const previewImages = visibleProperties.slice(0, 3).map((p) => p.image);
+
+  // ✅ EMPTY STATE
+  if (empty) {
+    return (
+      <section className="">
+        <div className="flex items-end justify-between gap-4 mb-5 md:mb-6">
+          <div>
+            <h2
+              className="text-[1.8rem] sm:text-[2rem] md:text-[2.2rem] font-bold tracking-tight dark:text-white"
+              style={{ color: dark }}
+            >
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="mt-2 text-sm sm:text-base text-slate-500 dark:text-slate-400">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200/50 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/30 p-8 text-center">
+          <p className="text-slate-600 dark:text-slate-400">
+            No properties available right now
+          </p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-500">
+            Check back soon for new listings
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  // ✅ ERROR STATE
+  if (error) {
+    return (
+      <section className="">
+        <div className="flex items-end justify-between gap-4 mb-5 md:mb-6">
+          <div>
+            <h2
+              className="text-[1.8rem] sm:text-[2rem] md:text-[2.2rem] font-bold tracking-tight dark:text-white"
+              style={{ color: dark }}
+            >
+              {title}
+            </h2>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-red-200/50 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 p-8 flex items-start gap-4">
+          <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-red-800 dark:text-red-300 font-medium">
+              Unable to load properties
+            </p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+              {subtitle || "Please try again later"}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="">
@@ -133,10 +199,12 @@ export function PropertyRail({
                   <PropertyRailCard key={property.id} property={property} />
                 ))}
 
-                <PropertyRailSeeAllCard
-                  to={viewAllLink}
-                  previewImages={previewImages}
-                />
+                {properties.length > 0 && (
+                  <PropertyRailSeeAllCard
+                    to={viewAllLink}
+                    previewImages={previewImages}
+                  />
+                )}
               </>
             )}
         </div>

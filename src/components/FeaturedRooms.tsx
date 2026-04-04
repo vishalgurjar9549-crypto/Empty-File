@@ -1,19 +1,9 @@
-import { useEffect } from "react";
-import { useAppDispatch } from "../store/hooks";
-import { fetchRooms } from "../store/slices/rooms.slice";
 import { PropertyRailSection } from "./home/PropertyRailSection";
 
 export function FeaturedRooms() {
-  const dispatch = useAppDispatch();
-
-  useEffect(() => {
-    dispatch(
-      fetchRooms({
-        sort: "most_viewed",
-        limit: 30, // fetch more so sections feel real
-      })
-    );
-  }, [dispatch]);
-
+  // ✅ STEP 2: PropertyRailSection handles its own data fetching
+  // No need for this component to fetch - it's just a wrapper
+  // PropertyRailSection calls fetchFeaturedSection internally
+  
   return <PropertyRailSection />;
 }

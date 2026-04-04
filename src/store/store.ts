@@ -1,3 +1,9 @@
+// src/store/store.ts
+/**
+ * ✅ UPDATED: Added homeSections reducer
+ * ✅ UPDATED: Added stats reducer for platform-wide statistics
+ */
+
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './slices/auth.slice';
 import roomsReducer from './slices/rooms.slice';
@@ -12,6 +18,10 @@ import tenantDashboardReducer from './slices/tenantDashboard.slice';
 import otpReducer from './slices/otp.slice';
 import reviewsReducer from './slices/reviews.slice';
 import favoritesReducer from './slices/favorites.slice';
+// ✅ NEW: Import isolated home sections reducer
+import homeSectionsReducer from './slices/homeSections.slice';
+// ✅ NEW: Import stats reducer for global platform stats
+import statsReducer from './slices/stats.slice';
 
 export const store = configureStore({
   reducer: {
@@ -27,13 +37,15 @@ export const store = configureStore({
     tenantDashboard: tenantDashboardReducer,
     otp: otpReducer,
     reviews: reviewsReducer,
-    favorites: favoritesReducer
+    favorites: favoritesReducer,
+    // ✅ NEW: Add isolated home sections state
+    homeSections: homeSectionsReducer,
+    // ✅ NEW: Add platform stats state
+    stats: statsReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware({
     serializableCheck: {
-      // Ignore these action types
       ignoredActions: ['persist/PERSIST', 'otp/openOtpModal'],
-      // Ignore these paths in the state
       ignoredPaths: ['otp.pendingRequest']
     }
   })

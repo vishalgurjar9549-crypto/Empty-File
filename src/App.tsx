@@ -9,9 +9,9 @@ import {
 import Footer from "./components/Footer";
 import { Provider } from "react-redux";
 import { store } from "./store/store";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppSelector, useAppDispatch } from "./store/hooks";
 import { getCurrentUser } from "./store/slices/auth.slice";
-import { loadCities, loadAmenities } from "./store/slices/metadata.slice";
 import { hideToast } from "./store/slices/ui.slice";
 import { fetchFavorites, clearFavorites } from "./store/slices/favorites.slice";
 import { Home } from "./pages/Home";
@@ -43,6 +43,7 @@ import { TenantRoute } from "./components/tenant/TenantRoute";
 import { IdempotencyArchitecture } from "./pages/architecture/IdempotencyArchitecture";
 import { OutboxArchitecture } from "./pages/architecture/OutboxArchitecture";
 import { useTheme } from "./hooks/useTheme";
+import { useInitializeAppData } from "./hooks/useInitializeAppData";
 import PrivacyPolicy from "./pages/policy/PrivacyPolicy";
 import TermsConditions from "./pages/policy/TermsConditions";
 import RefundPolicy from "./pages/policy/RefundPolicy";
@@ -93,6 +94,9 @@ function AppContent() {
 
   useTheme();
 
+  // ✅ STEP 1: Initialize all global app data once
+  useInitializeAppData();
+
   // Wake backend
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/health`).catch(() => {});
@@ -106,11 +110,7 @@ function AppContent() {
     }
   }, [token, dispatch]);
 
-  useEffect(() => {
-    dispatch(loadCities());
-    dispatch(loadAmenities());
-  }, [dispatch]);
-
+  // ✅ Fetch favorites after auth status changes
   useEffect(() => {
     if (authStatus === "AUTHENTICATED") {
       dispatch(fetchFavorites());
@@ -291,12 +291,26 @@ function AppContent() {
 }
 
 export function App() {
+  // Create a client for React Query with optimized defaults
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+        retry: 1,
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+
   return (
-    <Provider store={store}>
-      <BrowserRouter>
-        <ScrollToTop />
-        <AppContent />
-      </BrowserRouter>
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
+        <BrowserRouter>
+          <ScrollToTop />
+          <AppContent />
+        </BrowserRouter>
+      </Provider>
+    </QueryClientProvider>
   );
 }

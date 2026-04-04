@@ -12,10 +12,7 @@ import {
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { updateRoom } from "../store/slices/rooms.slice";
-import {
-  loadAllCities,
-  loadAmenities,
-} from "../store/slices/metadata.slice";
+import { loadAllCities } from "../store/slices/metadata.slice";
 import { showToast } from "../store/slices/ui.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
@@ -156,10 +153,11 @@ export function EditPropertyModal({
   const [initialData, setInitialData] = useState<FormDataType>(getRoomFormData(room));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // ✅ Amenities are already loaded globally at App.tsx initialization
+  // Only load allCities here if needed
   useEffect(() => {
     if (allCities.length === 0) dispatch(loadAllCities());
-    if (amenities.length === 0) dispatch(loadAmenities());
-  }, [dispatch, allCities.length, amenities.length]);
+  }, [dispatch, allCities.length]);
 
   useEffect(() => {
     if (!isOpen) return;

@@ -43,11 +43,8 @@ export function FilterSidebar({
     setLocalFilters(filters);
   }, [filters]);
 
-  useEffect(() => {
-    if (cities.length === 0) {
-      dispatch(loadCities());
-    }
-  }, [dispatch, cities.length]);
+  // ✅ REMOVED: Cities are loaded at App level via useInitializeAppData
+  // No need to fetch again here - just consume from Redux state
 
   // Calculate active filter count
   const getActiveFilterCount = () => {

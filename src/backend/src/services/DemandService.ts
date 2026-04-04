@@ -101,22 +101,7 @@ export class DemandService {
       return demandMap;
     }
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    const groupedCounts = await this.prisma.event.groupBy({
-      by: ["propertyId", "type"],
-      where: {
-        propertyId: { in: uniqueIds },
-        createdAt: { gte: sevenDaysAgo },
-        type: {
-          in: [EventType.PROPERTY_VIEW, ...CONTACT_EVENT_TYPES],
-        },
-      },
-      _count: {
-        _all: true,
-      },
-    });
-
+    // Initialize all properties with 0 values
     uniqueIds.forEach((propertyId) => {
       demandMap.set(propertyId, {
         weeklyViews: 0,
@@ -124,28 +109,57 @@ export class DemandService {
       });
     });
 
-    groupedCounts.forEach((row) => {
-      if (!row.propertyId) {
-        return;
-      }
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const current = demandMap.get(row.propertyId) || {
-        weeklyViews: 0,
-        weeklyContacts: 0,
-      };
+      // ✅ SAFE OPTIMIZATION: Use Prisma groupBy for efficient aggregation
+      // This achieves good performance with proper Prisma error handling
+      const groupedCounts = await this.prisma.event.groupBy({
+        by: ['propertyId', 'type'],
+        where: {
+          propertyId: { in: uniqueIds },
+          createdAt: { gte: sevenDaysAgo },
+          type: {
+            in: [EventType.PROPERTY_VIEW, ...CONTACT_EVENT_TYPES],
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      });
 
-      if (row.type === EventType.PROPERTY_VIEW) {
-        current.weeklyViews += row._count._all;
-      } else if (
-        row.type === EventType.CONTACT_UNLOCK ||
-        row.type === EventType.CONTACT_ACCESS
-      ) {
-        current.weeklyContacts += row._count._all;
-      }
+      // Aggregate counts by propertyId and type
+      groupedCounts.forEach((row) => {
+        if (!row.propertyId) {
+          return;
+        }
 
-      demandMap.set(row.propertyId, current);
-    });
+        const current = demandMap.get(row.propertyId) || {
+          weeklyViews: 0,
+          weeklyContacts: 0,
+        };
 
-    return demandMap;
+        if (row.type === EventType.PROPERTY_VIEW) {
+          current.weeklyViews += row._count._all;
+        } else if (
+          row.type === EventType.CONTACT_UNLOCK ||
+          row.type === EventType.CONTACT_ACCESS
+        ) {
+          current.weeklyContacts += row._count._all;
+        }
+
+        demandMap.set(row.propertyId, current);
+      });
+
+      return demandMap;
+    } catch (error) {
+      logger.error('Error fetching demand map', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        propertyIds: uniqueIds.length,
+      });
+      // Return initialized empty map on error (safe fallback)
+      return demandMap;
+    }
   }
 }

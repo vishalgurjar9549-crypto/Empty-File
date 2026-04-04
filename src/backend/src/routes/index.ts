@@ -17,6 +17,8 @@ import tenantDashboardRoutes from './tenant-dashboard.routes';
 import contactRoutes from './contact.routes';
 import reviewRoutes from './reviews.routes';
 import favoritesRoutes from './favorites.routes';
+import statsRoutes from './stats.routes';
+import homepageRoutes from './homepage.routes';
 const router = Router();
 router.use('/auth', authRoutes);
 router.use('/rooms', roomRoutes);
@@ -34,6 +36,8 @@ router.use('/cloudinary', cloudinaryRoutes);
 router.use('/contacts', contactRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/favorites', favoritesRoutes);
+router.use('/stats', statsRoutes);
+router.use('/homepage-data', homepageRoutes);
 console.log("ROUTES FILE LOADED");
 // Property Notes Routes
 // POST/GET /api/properties/:propertyId/notes

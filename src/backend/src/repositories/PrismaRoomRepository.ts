@@ -3,6 +3,7 @@ import {
   Room as PrismaRoom,
   Prisma,
   ReviewStatus,
+  EventType,
 } from "@prisma/client";
 import { Room as DomainRoom } from "../models/Room";
 import { IRoomRepository } from "./interfaces";
@@ -360,71 +361,87 @@ export class PrismaRoomRepository implements IRoomRepository {
       });
 
       if (sortNorm === "most_viewed" || sortNorm === "most_contacted") {
-        const candidateRows = await this.prisma.room.findMany({
-          where,
-          select: {
-            id: true,
-            createdAt: true,
-          },
-        });
+        // ✅ SAFE OPTIMIZATION: Fetch ranked IDs via Prisma groupBy with in-memory sorting
+        // This avoids complex raw SQL while maintaining good performance
+        try {
+          const isViewMetric = sortNorm === "most_viewed";
+          const targetEventType = isViewMetric
+            ? EventType.PROPERTY_VIEW
+            : EventType.CONTACT_UNLOCK;
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-        const demandMap = await this.demandService.getDemandMap(
-          candidateRows.map((room) => room.id),
-        );
+          // STEP 1: Get event aggregation for ranking
+          const eventAggregation = await this.prisma.event.groupBy({
+            by: ['propertyId'],
+            where: {
+              type: isViewMetric
+                ? EventType.PROPERTY_VIEW
+                : {
+                    in: [EventType.CONTACT_UNLOCK, EventType.CONTACT_ACCESS],
+                  },
+              createdAt: { gte: sevenDaysAgo },
+              propertyId: { not: null },
+            },
+            _count: {
+              _all: true,
+            },
+          });
 
-        const rankedIds = candidateRows
-          .sort((a, b) => {
-            const aDemand = demandMap.get(a.id) || { weeklyViews: 0, weeklyContacts: 0 };
-            const bDemand = demandMap.get(b.id) || { weeklyViews: 0, weeklyContacts: 0 };
-            const aMetric =
-              sortNorm === "most_contacted"
-                ? aDemand.weeklyContacts
-                : aDemand.weeklyViews;
-            const bMetric =
-              sortNorm === "most_contacted"
-                ? bDemand.weeklyContacts
-                : bDemand.weeklyViews;
+          // STEP 2: Sort by count in memory (since Prisma groupBy doesn't support count orderBy)
+          const sortedByDemand = eventAggregation
+            .sort((a, b) => b._count._all - a._count._all);
 
-            if (bMetric !== aMetric) {
-              return bMetric - aMetric;
-            }
+          // STEP 3: Extract ranked room IDs and apply pagination
+          const rankedRoomIds = sortedByDemand
+            .slice(skip, skip + limit)
+            .map(agg => agg.propertyId)
+            .filter(Boolean) as string[];
 
-            return b.createdAt.getTime() - a.createdAt.getTime();
-          })
-          .map((room) => room.id);
+          if (rankedRoomIds.length === 0) {
+            return { rooms: [], total, hasNextPage: false };
+          }
 
-        const pagedIds = rankedIds.slice(skip, skip + limit);
-        const hasNextPage = skip + limit < rankedIds.length;
+          // STEP 4: Fetch full room data for ranked IDs only
+          const raw = await this.prisma.room.findMany({
+            where: { id: { in: rankedRoomIds }, ...where },
+            include,
+          });
 
-        if (pagedIds.length === 0) {
-          return {
-            rooms: [],
-            total,
-            hasNextPage,
-            nextCursor: undefined,
-          };
+          // STEP 5: Reorder by rank (maintain the event-based ranking order)
+          const orderedRows = rankedRoomIds
+            .map(id => raw.find(room => room.id === id))
+            .filter(Boolean) as typeof raw;
+
+          const rooms = await this.attachDemand(
+            orderedRows.map(r => this.toDomain(r))
+          );
+
+          const hasNextPage = skip + limit < sortedByDemand.length;
+
+          return { rooms, total, hasNextPage };
+        } catch (error) {
+          logger.warn('Most viewed/contacted sorting failed, falling back to standard sorting', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            sortNorm,
+          });
+
+          // Safe fallback: Use standard sorted pagination
+          const rawOffset = await this.prisma.room.findMany({
+            where,
+            skip,
+            take: limit + 1,
+            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+            include,
+          });
+          const hasNextPage = rawOffset.length > limit;
+          const pageRows = hasNextPage ? rawOffset.slice(0, limit) : rawOffset;
+          const rooms = await this.attachDemand(
+            pageRows.map(r => this.toDomain(r))
+          );
+
+          return { rooms, total, hasNextPage };
         }
-
-        const raw = await this.prisma.room.findMany({
-          where: {
-            id: { in: pagedIds },
-          },
-          include,
-        });
-
-        const orderedRows = pagedIds
-          .map((id) => raw.find((room) => room.id === id))
-          .filter(Boolean) as typeof raw;
-        const rooms = await this.attachDemand(
-          orderedRows.map((room) => this.toDomain(room)),
-        );
-
-        return {
-          rooms,
-          total,
-          hasNextPage,
-          nextCursor: undefined,
-        };
       }
 
       const rawOffset = await this.prisma.room.findMany({

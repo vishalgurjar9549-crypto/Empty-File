@@ -7,13 +7,13 @@ import {
   MapPin,
   Users,
   Wallet,
+  Flame,
 
 } from "lucide-react";
 
 import { Hero } from "../components/Hero";
 import { FeaturedRooms } from "../components/FeaturedRooms";
-import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { loadCities } from "../store/slices/metadata.slice";
+import { useAppSelector } from "../store/hooks";
 import { StayCollectionShowcase } from "../components/StayCollectionShowcase";
 import PopularCitiesScroller from "../components/PopularCitiesScroller";
 import { WhatsNewProperties } from "../components/WhatsNewProperties";
@@ -89,14 +89,11 @@ const trustItems = [
 // Home Page
 // ==============================
 export function Home() {
-  const dispatch = useAppDispatch();
   const cities = useAppSelector((state) => state.metadata?.cities ?? []);
+  const citiesLoading = useAppSelector((state) => state.metadata?.loading ?? false);
 
-  useEffect(() => {
-    if (cities.length === 0) {
-      dispatch(loadCities());
-    }
-  }, [dispatch, cities.length]);
+  // ✅ Cities are already loaded globally at App.tsx initialization
+  // No need for duplicate loading here
 
   return (
     <div className="bg-gradient-to-b from-white via-slate-50 to-white dark:from-slate-950 dark:via-slate-950 dark:to-black transition-colors duration-500">
@@ -107,38 +104,24 @@ export function Home() {
       <StayCollectionShowcase/>
 
       <WhatsNewProperties />
+      
       {/* ============================== */}
-      {/* Popular Cities */}
+      {/* STEP 5: Trust Signal */}
       {/* ============================== */}
-     
-     <PopularCitiesScroller cities={cities} />
-
-      {/* ============================== */}
-      {/* Trust / Highlights */}
-      {/* ============================== */}
-      {/* <section className="relative py-14 md:py-20 border-y border-slate-200/70 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/60 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5 md:gap-6">
-            {trustItems.map((item, i) => (
-              <div
-                key={i}
-                className="group rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl p-5 text-center shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white group-hover:bg-amber-500 group-hover:text-white transition-all duration-300">
-                  <item.icon className="w-5 h-5" />
-                </div>
-
-                <p className="font-semibold text-sm sm:text-[15px] text-slate-900 dark:text-white">
-                  {item.label}
-                </p>
-                <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                  {item.sub}
-                </p>
-              </div>
-            ))}
+      <section className="relative py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
+        <div className="max-w-7xl mx-auto">
+          {/* Trust Signal Text */}
+          <div className="flex items-center justify-center gap-2 mb-8 text-center">
+            <Flame className="h-5 w-5 text-orange-500 animate-pulse" />
+            <p className="text-sm sm:text-base font-semibold text-slate-700 dark:text-slate-300">
+              🔥 People are actively searching in your city
+            </p>
           </div>
+
+          {/* Popular Cities */}
+          <PopularCitiesScroller cities={cities} isLoading={citiesLoading} />
         </div>
-      </section> */}
+      </section>
 
       {/* Featured Rooms */}
       <FeaturedRooms />
@@ -146,13 +129,12 @@ export function Home() {
       {/* ============================== */}
       {/* Testimonials */}
       {/* ============================== */}
-   
-        <Testimonials />
+      <Testimonials />
 
       {/* ============================== */}
       {/* CTA / Owner Section */}
       {/* ============================== */}
-    <GrowWithSection/>
+      <GrowWithSection/>
     </div>
   );
 }

@@ -3,10 +3,7 @@ import { X, ChevronDown, Check, MapPin, Home, IndianRupee, Sparkles } from "luci
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { createRoom } from "../store/slices/rooms.slice";
 import { getCurrentUser } from "../store/slices/auth.slice";
-import {
-  loadAllCities,
-  loadAmenities,
-} from "../store/slices/metadata.slice";
+import { loadAllCities } from "../store/slices/metadata.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
 import FullscreenLoader from "./ui/Loader";
@@ -116,10 +113,11 @@ export function AddPropertyModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // ✅ Amenities are already loaded globally at App.tsx initialization
+  // Only load allCities here if needed
   useEffect(() => {
     if (allCities.length === 0) dispatch(loadAllCities());
-    if (amenities.length === 0) dispatch(loadAmenities());
-  }, [dispatch, allCities.length, amenities.length]);
+  }, [dispatch, allCities.length]);
 
   useEffect(() => {
     if (!isOpen) return;

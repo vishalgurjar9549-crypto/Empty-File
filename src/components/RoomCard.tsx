@@ -21,14 +21,14 @@ export function RoomCard({
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   
-  // ✅ Safe property access with defaults
+  // ✅ Safe property access - NO FAKE DEFAULTS
   const roomId = room?.id || '';
   const title = room?.title || 'No Title';
   const description = room?.description || '';
   const image = room?.images?.[0] || '/placeholder.png';
-  const price = room?.pricePerMonth || 0;
+  const price = room?.pricePerMonth ?? null;  // Use null coalescence, not || 0
   const location = room?.location || room?.city || 'Unknown Location';
-  const rating = room?.rating || 0;
+  const rating = room?.rating ?? null;  // Use null coalescence, not || 0
   const roomType = room?.roomType || 'Room';
   const amenities = room?.amenities || [];
   const isPopular = room?.isPopular || false;
@@ -74,12 +74,20 @@ export function RoomCard({
 
           {/* Price Tag - Floating Glass Pill */}
           <div className="absolute bottom-3 left-3 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg">
-            <span className="font-playfair font-bold text-white text-lg">
-              ₹{price.toLocaleString()}
-            </span>
-            <span className="text-[10px] text-slate-200 font-medium uppercase tracking-wider ml-1">
-              / Mo
-            </span>
+            {price !== null ? (
+              <>
+                <span className="font-playfair font-bold text-white text-lg">
+                  ₹{price.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-200 font-medium uppercase tracking-wider ml-1">
+                  / Mo
+                </span>
+              </>
+            ) : (
+              <span className="text-[10px] text-slate-200 font-medium uppercase tracking-wider">
+                Price Available
+              </span>
+            )}
           </div>
 
           {/* Top Badges */}
@@ -117,7 +125,7 @@ export function RoomCard({
             <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-100 dark:border-slate-700">
               <Star className="w-3 h-3 text-gold fill-gold" />
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                {rating}
+                {rating !== null ? rating : '—'}
               </span>
             </div>
           </div>
