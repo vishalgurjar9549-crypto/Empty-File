@@ -93,6 +93,19 @@ const VerifyEmailLoginOtpSchema = z.object({
     .regex(/^\d+$/, "OTP must contain only digits")
 });
 
+const ForgotPasswordSchema = z.object({
+  email: z.string().email().toLowerCase()
+});
+
+const ResetPasswordSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  newPassword: z.string().min(6, "Password must be at least 6 characters")
+});
+
+const ValidateResetTokenSchema = z.object({
+  token: z.string().min(1, "Token is required")
+});
+
 /* =====================================================
    GOOGLE OAUTH ROUTES
 ===================================================== */
@@ -236,6 +249,25 @@ router.post("/request-email-login-otp", validateBody(RequestEmailLoginOtpSchema)
 // Verify OTP and login via email
 router.post("/verify-email-login-otp", validateBody(VerifyEmailLoginOtpSchema), (req, res) =>
   authController.verifyEmailLoginOTP(req, res),
+);
+
+/* =====================================================
+   PASSWORD RESET
+===================================================== */
+
+// Request password reset (forgot password)
+router.post("/forgot-password", validateBody(ForgotPasswordSchema), (req, res) =>
+  authController.requestPasswordReset(req, res),
+);
+
+// Reset password with token
+router.post("/reset-password", validateBody(ResetPasswordSchema), (req, res) =>
+  authController.resetPassword(req, res),
+);
+
+// Validate reset token before showing form
+router.post("/validate-reset-token", validateBody(ValidateResetTokenSchema), (req, res) =>
+  authController.validateResetToken(req, res),
 );
 
 export default router;

@@ -138,6 +138,8 @@ export class IdentityLinkingService {
       emailVerifiedAt: null,
       emailVerifyToken: null,
       emailVerifyExpiry: null,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
       city: null,
       lastLoginAt: null,
       lastPropertyUpdateAt: null,

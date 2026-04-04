@@ -23,6 +23,7 @@ export class RoomController {
     this.deleteRoom = this.deleteRoom.bind(this);
     this.getOwnerRooms = this.getOwnerRooms.bind(this);
     this.toggleRoomStatus = this.toggleRoomStatus.bind(this);
+    this.resubmitForReview = this.resubmitForReview.bind(this);
   }
   async createRoom(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -259,6 +260,40 @@ export class RoomController {
         message: 'Room status updated successfully'
       });
     } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  async resubmitForReview(req: AuthRequest, res: Response) {
+    try {
+      const {
+        id
+      } = req.params;
+      const ownerId = req.user?.userId;
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        });
+      }
+      const requesterRole = req.user?.role;
+      logger.info('Resubmitting property for review', {
+        roomId: id,
+        ownerId
+      });
+      const room = await this.roomService.resubmitForReview(id, ownerId, requesterRole);
+      res.json({
+        success: true,
+        data: room,
+        message: 'Property resubmitted successfully for review'
+      });
+    } catch (error: any) {
+      logger.error('Error resubmitting property', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       res.status(400).json({
         success: false,
         message: error.message

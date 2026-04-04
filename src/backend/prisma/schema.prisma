@@ -21,6 +21,8 @@ model User {
   emailVerifiedAt          DateTime?
   emailVerifyToken         String?                   @unique
   emailVerifyExpiry        DateTime?
+  passwordResetToken       String?                   @unique
+  passwordResetExpiry      DateTime?
   role                     Role                      @default(TENANT)
   city                     String?
   isActive                 Boolean                   @default(true)

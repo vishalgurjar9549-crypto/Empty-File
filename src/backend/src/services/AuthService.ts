@@ -64,6 +64,8 @@ export class AuthService {
       emailVerifiedAt: null,
       emailVerifyToken: null,
       emailVerifyExpiry: null,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
       lastLoginAt: null,
       lastPropertyUpdateAt: null,
     });

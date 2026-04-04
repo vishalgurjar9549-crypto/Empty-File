@@ -386,6 +386,45 @@ export class RoomService {
     return updatedRoom;
   }
 
+  async resubmitForReview(id: string, ownerId: string, requesterRole?: string): Promise<Room> {
+    logger.info('Resubmitting property for review', {
+      roomId: id,
+      ownerId
+    });
+
+    const room = await this.roomRepository.findById(id);
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    // Allow ADMIN to bypass ownership check
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'admin';
+    if (!isAdmin && room.ownerId !== ownerId) {
+      throw new Error('You can only resubmit your own properties');
+    }
+
+    // Verify property is in NEEDS_CORRECTION status
+    if (room.reviewStatus !== ReviewStatus.NEEDS_CORRECTION) {
+      throw new Error(`Cannot resubmit property with status ${room.reviewStatus}. Only properties with "NEEDS_CORRECTION" status can be resubmitted.`);
+    }
+
+    // Update room status to PENDING_REVIEW
+    const prisma = getPrismaClient();
+    const updatedRoom = await prisma.room.update({
+      where: { id },
+      data: {
+        reviewStatus: ReviewStatus.PENDING_REVIEW
+      }
+    });
+
+    logger.info('Property resubmitted successfully', {
+      roomId: id,
+      newStatus: ReviewStatus.PENDING_REVIEW
+    });
+
+    return updatedRoom as Room;
+  }
+
   //   async toggleRoomStatus(id: string, ownerId: string): Promise<Room> {
   //   const room = await this.roomRepository.findById(id);
 

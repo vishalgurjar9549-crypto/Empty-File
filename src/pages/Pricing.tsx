@@ -318,7 +318,7 @@ export default function Pricing() {
                     </div>
 
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 pb-6 border-b border-slate-100 dark:border-slate-700">
-                      {plan.price === 0 ? 'Perfect to get started' : `Full access in ${selectedCityLabel}`}
+                      {plan.price === 0 ? 'Perfect to get started' : `Full access in ${selectedCity?.charAt(0).toUpperCase() + selectedCity?.slice(1)} with this plan`}
                     </p>
 
                     {/* Features */}

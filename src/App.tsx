@@ -22,6 +22,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { GoogleCallback } from "./pages/GoogleCallback";
+import { ForgotPassword } from "./pages/auth/ForgotPassword";
+import { ResetPassword } from "./pages/auth/ResetPassword";
 import { About } from "./pages/About";
 import { Contact } from "./pages/Contact";
 import { Profile } from "./pages/Profile";
@@ -194,6 +196,8 @@ function AppContent() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/auth/login" element={<Login />} />
               <Route path="/auth/register" element={<Register />} />
+              <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route
                 path="/auth/google/callback"
