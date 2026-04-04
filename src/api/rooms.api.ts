@@ -63,5 +63,11 @@ export const roomsApi = {
     assertValidParam(id, 'roomId');
     const response = await axiosInstance.patch<ApiResponse<Room>>(`/rooms/${id}/status`);
     return response.data.data;
+  },
+  // Resubmit property for review (owner only)
+  resubmitForReview: async (id: string): Promise<Room> => {
+    assertValidParam(id, 'roomId');
+    const response = await axiosInstance.post<ApiResponse<Room>>(`/rooms/${id}/resubmit`);
+    return response.data.data;
   }
 };

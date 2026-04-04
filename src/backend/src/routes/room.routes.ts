@@ -16,4 +16,5 @@ router.post('/', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), validat
 router.put('/:id', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), validateBody(UpdateRoomSchema), (req, res, next) => roomController.updateRoom(req as any, res));
 router.delete('/:id', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), (req, res, next) => roomController.deleteRoom(req as any, res));
 router.patch('/:id/status', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), (req, res, next) => roomController.toggleRoomStatus(req as any, res));
+router.post('/:id/resubmit', authMiddleware, authorizeRoles(Role.OWNER, Role.ADMIN), (req, res, next) => roomController.resubmitForReview(req as any, res));
 export default router;

@@ -52,6 +52,7 @@ import { showToast } from "../store/slices/ui.slice";
 import { updateUser, getCurrentUser } from "../store/slices/auth.slice";
 import { ownerApi } from "../api/owner.api";
 import { notificationsApi } from "../api/notifications.api";
+import { roomsApi } from "../api/rooms.api";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -918,20 +919,46 @@ export function Dashboard() {
     });
   };
 
-  const handleResubmit = (roomId: string) => {
-    // TODO:
-    // Replace this later with your actual API / redux action
-    // Example:
-    // dispatch(resubmitRoomForReview(roomId)).then(() => { ... })
+  const handleResubmit = async (roomId: string) => {
+    try {
+      // Call the API to resubmit property for review
+      const updatedRoom = await roomsApi.resubmitForReview(roomId);
 
-    dispatch(fetchOwnerRooms());
+      // Show success message
+      dispatch(
+        showToast({
+          message: "Property resubmitted successfully! Your property is now under review.",
+          type: "success",
+        })
+      );
 
-    setResubmitModal({
-      isOpen: false,
-      room: null,
-    });
+      // Close the modal and feedback view
+      setResubmitModal({
+        isOpen: false,
+        room: null,
+      });
 
-    setViewingFeedback(null);
+      setViewingFeedback(null);
+
+      // Refresh the owner's rooms to reflect the status change
+      dispatch(fetchOwnerRooms());
+      dispatch(fetchOwnerSummary());
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to resubmit property";
+      dispatch(
+        showToast({
+          message: errorMessage,
+          type: "error",
+        })
+      );
+      
+      // Close modal on error but keep viewing feedback visible
+      setResubmitModal({
+        isOpen: false,
+        room: null,
+      });
+    }
   };
 
   const getStatusBadge = (room: Room) => {

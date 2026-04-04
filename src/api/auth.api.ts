@@ -40,5 +40,23 @@ export const authApi = {
   loginPhone: async (phone: string): Promise<AuthResponse> => {
     const response = await axiosInstance.post<ApiResponse<AuthResponse>>('/auth/login-phone', { phone });
     return response.data.data;
+  },
+  // Request password reset via email
+  requestPasswordReset: async (email: string): Promise<{ message: string }> => {
+    const response = await axiosInstance.post<ApiResponse<{ message: string }>>('/auth/forgot-password', { email });
+    return response.data.data;
+  },
+  // Reset password with token
+  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await axiosInstance.post<ApiResponse<{ message: string }>>('/auth/reset-password', {
+      token,
+      newPassword
+    });
+    return response.data.data;
+  },
+  // Validate reset token (check if valid before showing form)
+  validateResetToken: async (token: string): Promise<{ valid: boolean; email?: string }> => {
+    const response = await axiosInstance.post<ApiResponse<{ valid: boolean; email?: string }>>('/auth/validate-reset-token', { token });
+    return response.data.data;
   }
 };

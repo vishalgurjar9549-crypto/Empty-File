@@ -17,6 +17,9 @@ export class AuthController {
     this.verifyEmailOTP = this.verifyEmailOTP.bind(this);
     this.requestEmailLoginOTP = this.requestEmailLoginOTP.bind(this);
     this.verifyEmailLoginOTP = this.verifyEmailLoginOTP.bind(this);
+    this.requestPasswordReset = this.requestPasswordReset.bind(this);
+    this.resetPassword = this.resetPassword.bind(this);
+    this.validateResetToken = this.validateResetToken.bind(this);
   }
 
   // =======================
@@ -593,6 +596,128 @@ export class AuthController {
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to verify OTP'
+      });
+    }
+  }
+
+  // =======================
+  // FORGOT PASSWORD (REQUEST RESET)
+  // =======================
+  async requestPasswordReset(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+
+      if (!email || String(email).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is required'
+        });
+      }
+
+      // Import PasswordResetService
+      const { PasswordResetService } = await import('../services/PasswordResetService');
+
+      // Request password reset (always returns success, even if email doesn't exist)
+      const result = await PasswordResetService.requestPasswordReset(
+        String(email).trim()
+      );
+
+      // Always return 200 OK with same response (security: don't reveal if email exists)
+      return res.json({
+        success: true,
+        message: 'If an account exists with that email, you will receive a password reset link'
+      });
+    } catch (error: any) {
+      // Even on error, return generic message
+      return res.json({
+        success: true,
+        message: 'If an account exists with that email, you will receive a password reset link'
+      });
+    }
+  }
+
+  // =======================
+  // RESET PASSWORD
+  // =======================
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || String(token).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Reset token is required'
+        });
+      }
+
+      if (!newPassword || String(newPassword).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'New password is required'
+        });
+      }
+
+      // Import PasswordResetService
+      const { PasswordResetService } = await import('../services/PasswordResetService');
+
+      // Reset password
+      const result = await PasswordResetService.resetPassword(
+        String(token).trim(),
+        String(newPassword).trim()
+      );
+
+      return res.json({
+        success: true,
+        message: 'Password reset successfully. You can now login with your new password.'
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  // =======================
+  // VALIDATE RESET TOKEN
+  // =======================
+  async validateResetToken(req: Request, res: Response) {
+    try {
+      const { token } = req.body;
+
+      if (!token || String(token).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Reset token is required'
+        });
+      }
+
+      // Import PasswordResetService
+      const { PasswordResetService } = await import('../services/PasswordResetService');
+
+      // Validate token
+      const result = await PasswordResetService.validateResetToken(
+        String(token).trim()
+      );
+
+      if (!result.valid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired reset token'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          valid: true,
+          email: result.email
+        }
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to validate token'
       });
     }
   }

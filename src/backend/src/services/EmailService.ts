@@ -141,6 +141,7 @@ export class EmailService {
 
   /**
    * Send password reset email
+   * Expiry: 20 minutes
    */
   async sendPasswordReset(email: string, resetLink: string): Promise<void> {
     const html = `
@@ -150,12 +151,12 @@ export class EmailService {
         <div style="text-align: center; margin: 30px 0;">
           <a href="${resetLink}" style="background: #000; color: white; padding: 12px 40px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Reset Password</a>
         </div>
-        <p style="color: #999; font-size: 14px;">This link expires in 1 hour.</p>
+        <p style="color: #999; font-size: 14px;">This link expires in 20 minutes.</p>
         <p style="color: #999; font-size: 14px;">If you didn't request this, please ignore this email.</p>
       </div>
     `;
 
-    const text = `Reset your password: ${resetLink}\nThis link expires in 1 hour.`;
+    const text = `Reset your password: ${resetLink}\nThis link expires in 20 minutes.`;
 
     await this.send({
       to: email,
