@@ -1,21 +1,33 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Filter, Search, X } from 'lucide-react';
+import { useEffect, useState, useMemo, useRef, memo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Filter, Search, X } from "lucide-react";
 
-import { RoomCard } from '../components/RoomCard';
-import { FilterSidebar } from '../components/FilterSidebar';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { fetchRooms } from '../store/slices/rooms.slice';
+import { RoomCard } from "../components/RoomCard";
+import { FilterSidebar } from "../components/FilterSidebar";
+import { VirtualizedGrid } from "../components/VirtualizedGrid";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { fetchRooms } from "../store/slices/rooms.slice";
 
 /* =========================================================
    FILTER CHIPS
 ========================================================= */
-function FilterChips({ appliedFilters, onRemoveFilter }: any) {
+/**
+ * ✅ Memoized FilterChips component
+ * Prevents re-renders when the chips list doesn't change
+ */
+const FilterChips = memo(function FilterChips({
+  appliedFilters,
+  onRemoveFilter,
+}: any) {
   const hasFilters =
     appliedFilters.city ||
     appliedFilters.minPrice ||
     appliedFilters.maxPrice ||
-    appliedFilters.roomType;
+    appliedFilters.roomType ||
+    (appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0) ||
+    (appliedFilters.genderPreference &&
+      appliedFilters.genderPreference !== "ANY") ||
+    (appliedFilters.idealFor && appliedFilters.idealFor.length > 0);
 
   if (!hasFilters) return null;
 
@@ -24,28 +36,71 @@ function FilterChips({ appliedFilters, onRemoveFilter }: any) {
       {appliedFilters.city && (
         <Chip
           label={`City: ${appliedFilters.city}`}
-          onRemove={() => onRemoveFilter('city')}
+          onRemove={() => onRemoveFilter("city")}
         />
       )}
 
       {(appliedFilters.minPrice || appliedFilters.maxPrice) && (
         <Chip
-          label={`₹${appliedFilters.minPrice || 0} - ₹${appliedFilters.maxPrice || 'Any'}`}
-          onRemove={() => onRemoveFilter('price')}
+          label={`₹${appliedFilters.minPrice || 0} - ₹${
+            appliedFilters.maxPrice || "Any"
+          }`}
+          onRemove={() => onRemoveFilter("price")}
         />
       )}
 
       {appliedFilters.roomType && (
         <Chip
           label={`Type: ${appliedFilters.roomType.toUpperCase()}`}
-          onRemove={() => onRemoveFilter('roomType')}
+          onRemove={() => onRemoveFilter("roomType")}
+        />
+      )}
+
+      {/* ✅ NEW: Display multi-select room types */}
+      {appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0 && (
+        <Chip
+          label={`Types: ${appliedFilters.roomTypes.join(", ")}`}
+          onRemove={() => onRemoveFilter("roomTypes")}
+        />
+      )}
+
+      {/* ✅ NEW: Display gender preference */}
+      {appliedFilters.genderPreference &&
+        appliedFilters.genderPreference !== "ANY" && (
+          <Chip
+            label={`Gender: ${
+              appliedFilters.genderPreference === "MALE_ONLY"
+                ? "Boys"
+                : appliedFilters.genderPreference === "FEMALE_ONLY"
+                ? "Girls"
+                : "Anyone"
+            }`}
+            onRemove={() => onRemoveFilter("genderPreference")}
+          />
+        )}
+
+      {/* ✅ NEW: Display ideal for */}
+      {appliedFilters.idealFor && appliedFilters.idealFor.length > 0 && (
+        <Chip
+          label={`Ideal For: ${appliedFilters.idealFor.join(", ")}`}
+          onRemove={() => onRemoveFilter("idealFor")}
         />
       )}
     </div>
   );
-}
+});
 
-function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+/**
+ * ✅ Memoized Chip component
+ * Prevents re-renders when sibling chips update
+ */
+const Chip = memo(function Chip({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
   return (
     <button
       type="button"
@@ -58,7 +113,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
       </span>
     </button>
   );
-}
+});
 
 /* =========================================================
    MAIN COMPONENT
@@ -71,66 +126,133 @@ export function RoomsListing() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   /* =============================
+     INFINITE SCROLL STATE
+  ============================== */
+  const [allRooms, setAllRooms] = useState<typeof rooms>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  /* =============================
      GET FILTERS FROM URL
   ============================== */
   const getFiltersFromURL = () => {
+    const roomTypesParam = searchParams.get("roomTypes") || "";
+    const idealForParam = searchParams.get("idealFor") || "";
     return {
-      city: searchParams.get('city') || '',
-      minPrice: searchParams.get('minPrice') || '',
-      maxPrice: searchParams.get('maxPrice') || '',
-      roomType: searchParams.get('roomType') || '',
+      city: searchParams.get("city") || "",
+      minPrice: searchParams.get("minPrice") || "",
+      maxPrice: searchParams.get("maxPrice") || "",
+      roomType: searchParams.get("roomType") || "",
+      // ✅ NEW: Parse roomTypes from URL (comma-separated string → array)
+      roomTypes: roomTypesParam
+        ? roomTypesParam.split(",").filter((rt) => rt.trim())
+        : [],
+      // ✅ NEW: Parse genderPreference from URL
+      genderPreference: searchParams.get("genderPreference") || "",
+      // ✅ NEW: Parse idealFor from URL (comma-separated string → array)
+      idealFor: idealForParam
+        ? idealForParam.split(",").filter((inf) => inf.trim())
+        : [],
     };
   };
 
   const [filters, setFilters] = useState(() => getFiltersFromURL());
-  const [appliedFilters, setAppliedFilters] = useState(() => getFiltersFromURL());
-  const [sortBy, setSortBy] = useState(() => searchParams.get('sort') || 'latest');
-  const [page, setPage] = useState(() => Number(searchParams.get('page') || '1'));
+  const [appliedFilters, setAppliedFilters] = useState(() =>
+    getFiltersFromURL(),
+  );
+  const [sortBy, setSortBy] = useState(
+    () => searchParams.get("sort") || "latest",
+  );
+
+  // ✅ CURSOR PAGINATION: Use cursor instead of page
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [page, setPage] = useState(() =>
+    Number(searchParams.get("page") || "1"),
+  ); // For display only
 
   /* =============================
-     API FILTERS MEMO
+     API FILTERS MEMO - WITH CURSOR PAGINATION
   ============================== */
-  const apiFilters = useMemo(
-    () => ({
+  const apiFilters = useMemo(() => {
+    return {
       city: appliedFilters.city || undefined,
       minPrice: appliedFilters.minPrice || undefined,
       maxPrice: appliedFilters.maxPrice || undefined,
       roomType: appliedFilters.roomType || undefined,
+      roomTypes: appliedFilters.roomTypes?.length
+        ? appliedFilters.roomTypes
+        : undefined,
+      genderPreference:
+        appliedFilters.genderPreference &&
+        appliedFilters.genderPreference !== "ANY"
+          ? appliedFilters.genderPreference
+          : undefined,
+      idealFor: appliedFilters.idealFor?.length
+        ? appliedFilters.idealFor
+        : undefined,
       sort: sortBy,
-      page,
+      cursor: nextCursor,
       limit: 20,
-    }),
-    [appliedFilters, sortBy, page]
+    };
+  }, [
+    JSON.stringify(appliedFilters), // ✅ KEY FIX
+    sortBy,
+    nextCursor,
+  ]);
+
+  /* =============================
+     APPLY FILTERS - useCallback for optimization
+  ============================== */
+  const handleApplyFilters = useCallback((newFilters: any) => {
+    setFilters(newFilters);
+    setAppliedFilters(newFilters);
+    setAllRooms([]); // Clear existing rooms
+    setNextCursor(undefined); // ✅ CURSOR PAGINATION: Reset cursor when filters change
+    setHasMore(true);
+    setPage(1);
+  }, []);
+
+  /* =============================
+     REMOVE FILTER CHIP - useCallback for optimization
+  ============================== */
+  const handleRemoveFilter = useCallback(
+    (key: string) => {
+      const updated = { ...appliedFilters };
+
+      if (key === "roomType") {
+        updated.roomType = "";
+      } else if (key === "roomTypes") {
+        // ✅ NEW: Clear multi-select room types
+        updated.roomTypes = [];
+      } else if (key === "idealFor") {
+        // ✅ NEW: Clear ideal for array
+        updated.idealFor = [];
+      } else if (key === "price") {
+        updated.minPrice = "";
+        updated.maxPrice = "";
+      } else if (key === "genderPreference") {
+        // ✅ NEW: Clear gender preference
+        updated.genderPreference = "";
+      } else {
+        (updated as any)[key] = "";
+      }
+
+      setAppliedFilters(updated);
+      setFilters(updated);
+      setPage(1);
+    },
+    [appliedFilters],
   );
 
   /* =============================
-     APPLY FILTERS
+     SORT CHANGE - useCallback for optimization
   ============================== */
-  const handleApplyFilters = (newFilters: any) => {
-    setFilters(newFilters);
-    setAppliedFilters(newFilters);
+  const handleSortChange = useCallback((value: string) => {
+    setSortBy(value);
     setPage(1);
-  };
-
-  /* =============================
-     REMOVE FILTER CHIP
-  ============================== */
-  const handleRemoveFilter = (key: string, value?: string) => {
-    const updated = { ...appliedFilters };
-
-    if (key === 'roomType') {
-      updated.roomType = '';
-    } else if (key === 'price') {
-      updated.minPrice = '';
-      updated.maxPrice = '';
-    } else {
-      (updated as any)[key] = '';
-    }
-
-    setAppliedFilters(updated);
-    setFilters(updated);
-    setPage(1);
-  };
+  }, []);
 
   /* =============================
      SYNC URL
@@ -138,20 +260,121 @@ export function RoomsListing() {
   useEffect(() => {
     const params = new URLSearchParams();
 
-    if (appliedFilters.city) params.set('city', appliedFilters.city);
-    if (appliedFilters.minPrice) params.set('minPrice', appliedFilters.minPrice);
-    if (appliedFilters.maxPrice) params.set('maxPrice', appliedFilters.maxPrice);
-    if (appliedFilters.roomType) params.set('roomType', appliedFilters.roomType);
-    if (sortBy !== 'latest') params.set('sort', sortBy);
-    if (page > 1) params.set('page', String(page));
+    if (appliedFilters.city) params.set("city", appliedFilters.city);
+    if (appliedFilters.minPrice)
+      params.set("minPrice", appliedFilters.minPrice);
+    if (appliedFilters.maxPrice)
+      params.set("maxPrice", appliedFilters.maxPrice);
+    if (appliedFilters.roomType)
+      params.set("roomType", appliedFilters.roomType);
+    // ✅ NEW: Sync multi-select room types to URL
+    if (appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0) {
+      params.set("roomTypes", appliedFilters.roomTypes.join(","));
+    }
+    // ✅ NEW: Sync gender preference to URL
+    if (
+      appliedFilters.genderPreference &&
+      appliedFilters.genderPreference !== "ANY"
+    ) {
+      params.set("genderPreference", appliedFilters.genderPreference);
+    }
+    // ✅ NEW: Sync ideal for to URL
+    if (appliedFilters.idealFor && appliedFilters.idealFor.length > 0) {
+      params.set("idealFor", appliedFilters.idealFor.join(","));
+    }
+    if (sortBy !== "latest") params.set("sort", sortBy);
+    if (page > 1) params.set("page", String(page));
 
     setSearchParams(params);
   }, [appliedFilters, sortBy, page, setSearchParams]);
 
   /* =============================
+     FETCH NEXT PAGE (INFINITE SCROLL WITH CURSOR)
+  ============================== */
+  const fetchNextPage = useCallback(async () => {
+    // ✅ CRITICAL FIX #1: Double-check loading state to prevent race conditions
+    if (loadingMore || !hasMore || loading.fetch) {
+      console.log("[RoomsListing] Fetch blocked:", {
+        loadingMore,
+        hasMore,
+        reduxLoading: loading.fetch,
+      });
+      return;
+    }
+
+    setLoadingMore(true);
+    console.log("[RoomsListing] Fetching next page with cursor:", nextCursor);
+
+    try {
+      // ✅ CURSOR PAGINATION: Pass cursor instead of calculating page
+      const nextPageFilters = { ...apiFilters, cursor: nextCursor };
+
+      // Dispatch fetch for next page
+      const result = await dispatch(fetchRooms(nextPageFilters)).unwrap();
+
+      // ✅ CRITICAL FIX #2: Verify we got valid response before processing
+      if (!result || !result.rooms || result.rooms.length === 0) {
+        console.log("[RoomsListing] No more rooms available");
+        setHasMore(false);
+        return;
+      }
+
+      // ✅ Update the cursor for next fetch
+      if (result.meta?.nextCursor) {
+        setNextCursor(result.meta.nextCursor);
+      }
+
+      // ✅ Append rooms instead of replacing
+      setAllRooms((prev) => {
+        // Deduplicate by room ID to prevent duplicates
+        const existingIds = new Set(prev.map((r) => r.id));
+        const newRooms = result.rooms.filter((r) => !existingIds.has(r.id));
+
+        // ✅ CRITICAL FIX #3: Only append if we actually got new rooms
+        if (newRooms.length === 0) {
+          console.warn("[RoomsListing] All returned rooms were duplicates");
+          return prev; // Don't update if all duplicates
+        }
+
+        return [...prev, ...newRooms];
+      });
+
+      // ✅ CRITICAL FIX #4: Check if we've reached the end
+      if (result.meta?.hasNextPage === false) {
+        setHasMore(false);
+        console.log("[RoomsListing] Reached end (hasNextPage=false)");
+      } else if (result.rooms.length < 20) {
+        setHasMore(false);
+        console.log("[RoomsListing] Reached end (less than limit)");
+      }
+    } catch (error) {
+      console.error("[RoomsListing] Error fetching next page:", error);
+    } finally {
+      // ✅ CRITICAL: Always reset loading flag
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, hasMore, apiFilters, dispatch, loading.fetch]);
+
+  /* =============================
      FETCH DATA (STRICT MODE SAFE)
   ============================== */
+  const isFetchingRef = useRef(false);
   const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (isFetchingRef.current) return;
+
+    isFetchingRef.current = true;
+
+    dispatch(fetchRooms(apiFilters)).finally(() => {
+      isFetchingRef.current = false;
+    });
+  }, [dispatch, apiFilters]);
+  useEffect(() => {
+    console.log("[RoomsListing] Fetch triggered:", apiFilters);
+
+    dispatch(fetchRooms(apiFilters));
+  }, [dispatch, apiFilters]);
   const prevKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -159,15 +382,97 @@ export function RoomsListing() {
 
     if (prevKeyRef.current !== key) {
       fetchedRef.current = false;
+      // ✅ RESET INFINITE SCROLL on filter/sort change
+      setAllRooms([]);
+      setHasMore(true);
+      setLoadingMore(false);
     }
 
     if (fetchedRef.current) return;
+
+    // ✅ DEBUG: Log fetch initiation
+    console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
 
     fetchedRef.current = true;
     prevKeyRef.current = key;
 
     dispatch(fetchRooms(apiFilters));
   }, [apiFilters, dispatch]);
+
+  /* =============================
+     INFINITE SCROLL OBSERVER SETUP
+  ============================== */
+  useEffect(() => {
+    // ✅ Append initial rooms when Redux rooms update
+    if (rooms.length > 0) {
+      setAllRooms((prev) => {
+        if (prev.length === 0) {
+          // First fetch: use all rooms
+          return rooms;
+        }
+        // Subsequent fetches: rooms already appended in fetchNextPage
+        return prev;
+      });
+
+      // Determine if more data exists
+      if (meta?.total && rooms.length >= meta.total) {
+        setHasMore(false);
+      } else if (rooms.length < 20) {
+        // Less than limit means we hit the end
+        setHasMore(false);
+      }
+    }
+  }, [rooms, loading.fetch, meta]);
+
+  /* =============================
+     INTERSECTION OBSERVER for sentinel
+  ============================== */
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (
+          entry.isIntersecting &&
+          hasMore &&
+          !loadingMore &&
+          !loading.fetch &&
+          !isFetchingRef.current // ✅ CRITICAL
+        ) {
+          console.log("[RoomsListing] Sentinel visible - fetching next page");
+          fetchNextPage();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "100px", // Start loading 100px before reaching bottom
+        threshold: 0.1,
+      },
+    );
+
+    observerRef.current.observe(sentinelRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, loadingMore, loading.fetch, fetchNextPage]);
+
+  // ✅ DEBUG: Log state changes
+  useEffect(() => {
+    console.log("[RoomsListing] State updated:", {
+      allRoomsCount: allRooms.length,
+      initialRoomsCount: rooms.length,
+      isLoading: loading.fetch,
+      isLoadingMore: loadingMore,
+      hasMore,
+      hasError: !!meta?.total === false,
+      totalFromMeta: meta?.total,
+      firstRoomId: allRooms[0]?.id || "N/A",
+    });
+  }, [allRooms, rooms, loading.fetch, loadingMore, hasMore, meta]);
 
   /* =============================
      UI
@@ -197,10 +502,7 @@ export function RoomsListing() {
 
             <select
               value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => handleSortChange(e.target.value)}
               className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/20"
             >
               <option value="latest">Latest</option>
@@ -232,7 +534,7 @@ export function RoomsListing() {
 
           {/* GRID */}
           <div className="min-w-0 flex-1">
-            {loading.fetch ? (
+            {loading.fetch && allRooms.length === 0 ? (
               <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {[...Array(6)].map((_, i) => (
                   <div
@@ -241,11 +543,34 @@ export function RoomsListing() {
                   />
                 ))}
               </div>
-            ) : rooms.length ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {rooms.map((room: any) => (
-                  <RoomCard key={room.id} room={room} />
-                ))}
+            ) : allRooms.length ? (
+              <div>
+                <VirtualizedGrid
+                  items={allRooms}
+                  renderItem={(room) => <RoomCard room={room} />}
+                  columns={3}
+                  estimateSize={400}
+                  overscan={5}
+                  className="px-0"
+                  containerClassName="px-0"
+                />
+
+                {/* ✅ SENTINEL DIV for infinite scroll */}
+                <div ref={sentinelRef} className="py-8 text-center">
+                  {loadingMore && (
+                    <div className="inline-flex items-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold/30 border-t-gold"></div>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        Loading more...
+                      </span>
+                    </div>
+                  )}
+                  {!hasMore && allRooms.length > 0 && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No more properties to load
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 py-20 text-center">

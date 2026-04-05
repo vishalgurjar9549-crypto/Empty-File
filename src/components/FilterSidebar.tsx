@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { X, Filter } from "lucide-react";
-import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { loadCities } from "../store/slices/metadata.slice";
+import { useAppSelector } from "../store/hooks";
+import {
+  ROOM_TYPE_OPTIONS,
+  GENDER_PREFERENCE_UI_OPTIONS,
+  IDEAL_FOR_OPTIONS,
+  BUDGET_RANGES,
+} from "../constants/filterOptions";
+
 interface FilterSidebarProps {
   filters: any;
   setFilters: (filters: any) => void;
@@ -11,17 +17,17 @@ interface FilterSidebarProps {
   isLoading?: boolean;
   resultCount?: number;
 }
+
 const MAX_RENT = 500000; // industry upper bound
 const MIN_RENT = 0;
-const ROOM_TYPES = [
-  { label: "Single", value: "single" },
-  { label: "Shared", value: "shared" },
-  { label: "PG", value: "pg" },
-  { label: "1BHK", value: "1bhk" },
-  { label: "2BHK", value: "2bhk" },
-];
+
 const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
-export function FilterSidebar({
+
+/**
+ * ✅ OPTIMIZATION: FilterSidebar wrapped with React.memo
+ * Prevents re-renders when parent re-renders but filter state is unchanged
+ */
+function FilterSidebarComponent({
   filters,
   setFilters,
   onApplyFilters,
@@ -30,7 +36,6 @@ export function FilterSidebar({
   isLoading = false,
   resultCount = 0
 }: FilterSidebarProps) {
-  const dispatch = useAppDispatch();
   const {
     cities
   } = useAppSelector((state) => state.metadata);
@@ -52,6 +57,11 @@ export function FilterSidebar({
     if (localFilters.city) count++;
     if (localFilters.minPrice || localFilters.maxPrice) count++;
     if (localFilters.roomType) count++;
+    if (localFilters.roomTypes && localFilters.roomTypes.length > 0) count++;
+    // ✅ NEW: Count gender preference filter
+    if (localFilters.genderPreference && localFilters.genderPreference !== "ANY") count++;
+    // ✅ NEW: Count ideal for filter
+    if (localFilters.idealFor && localFilters.idealFor.length > 0) count++;
     return count;
   };
   // Lock body scroll when mobile menu is open
@@ -94,6 +104,20 @@ export function FilterSidebar({
     });
   };
 
+  // ✅ NEW: Multi-select room type handler
+  const handleRoomTypeToggle = (roomTypeValue: string) => {
+    const currentRoomTypes = localFilters.roomTypes || [];
+    const newRoomTypes = currentRoomTypes.includes(roomTypeValue)
+      ? currentRoomTypes.filter((rt: string) => rt !== roomTypeValue)
+      : [...currentRoomTypes, roomTypeValue];
+    
+    setLocalFilters({
+      ...localFilters,
+      roomTypes: newRoomTypes,
+      roomType: undefined, // Clear single selection when using multi-select
+    });
+  };
+
   const handlePriceChange = (key: "minPrice" | "maxPrice", value: string) => {
     let num = Number(value);
     if (isNaN(num)) num = 0;
@@ -122,6 +146,11 @@ export function FilterSidebar({
       minPrice: '',
       maxPrice: '',
       roomType: '',
+      roomTypes: [], // ✅ Multi-select clear
+      // ✅ NEW: Clear gender preference
+      genderPreference: '',
+      // ✅ NEW: Clear ideal for
+      idealFor: [],
     };
     setLocalFilters(clearedFilters);
     setFilters(clearedFilters);
@@ -232,16 +261,17 @@ export function FilterSidebar({
                 Room Type
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                {ROOM_TYPES.map((type) => {
-                  const isSelected = localFilters.roomType === type.value;
+                {ROOM_TYPE_OPTIONS.map((type) => {
+                  // ✅ NEW: Check multi-select array first, then fallback to single selection
+                  const isSelected = 
+                    (localFilters.roomTypes || []).includes(type.value) ||
+                    localFilters.roomType === type.value;
+                  
                   return (
                     <button
                       key={type.value}
                       onClick={() => {
-                        handleChange(
-                          "roomType",
-                          isSelected ? "" : type.value
-                        );
+                        handleRoomTypeToggle(type.value);
                       }}
                       className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
                         isSelected
@@ -250,6 +280,109 @@ export function FilterSidebar({
                       }`}
                     >
                       {type.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ✅ NEW: Gender Preference */}
+            <div>
+              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
+                Gender Preference
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                {GENDER_PREFERENCE_UI_OPTIONS.map((gender) => {
+                  const isSelected = localFilters.genderPreference === gender.value;
+                  
+                  return (
+                    <button
+                      key={gender.value}
+                      onClick={() => {
+                        setLocalFilters((prev: any) => ({
+                          ...prev,
+                          genderPreference: isSelected ? '' : gender.value,
+                        }));
+                      }}
+                      className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
+                      }`}
+                    >
+                      {gender.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ✅ NEW: Budget Predefined Ranges */}
+            <div>
+              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
+                Budget
+              </h3>
+              <div className="space-y-2">
+                {BUDGET_RANGES.map((range) => {
+                  const isSelected =
+                    localFilters.minPrice === range.min &&
+                    localFilters.maxPrice === range.max;
+
+                  return (
+                    <button
+                      key={range.label}
+                      onClick={() => {
+                        setLocalFilters((prev: any) => ({
+                          ...prev,
+                          minPrice: range.min,
+                          maxPrice: range.max,
+                        }));
+                      }}
+                      className={`w-full text-left py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ✅ NEW: Ideal For Multi-Select */}
+            <div>
+              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
+                Ideal For
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                {IDEAL_FOR_OPTIONS.map((option) => {
+                  const isSelected = (
+                    localFilters.idealFor || []
+                  ).includes(option.value);
+
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        const currentIdealFor = localFilters.idealFor || [];
+                        const newIdealFor = isSelected
+                          ? currentIdealFor.filter((v: string) => v !== option.value)
+                          : [...currentIdealFor, option.value];
+
+                        setLocalFilters((prev: any) => ({
+                          ...prev,
+                          idealFor: newIdealFor,
+                        }));
+                      }}
+                      className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
+                      }`}
+                    >
+                      {option.label}
                     </button>
                   );
                 })}
@@ -296,3 +429,9 @@ export function FilterSidebar({
       </aside>
     </>;
 }
+
+/**
+ * ✅ Memoized export
+ * Prevents re-renders when parent re-renders but props are unchanged
+ */
+export const FilterSidebar = memo(FilterSidebarComponent);

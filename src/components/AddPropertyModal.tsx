@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useId } from "react";
-import { X, ChevronDown, Check, MapPin, Home, IndianRupee, Sparkles } from "lucide-react";
+import { X, ChevronDown, Check, MapPin, Home, IndianRupee, Sparkles, Users } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { createRoom } from "../store/slices/rooms.slice";
 import { getCurrentUser } from "../store/slices/auth.slice";
@@ -7,20 +7,19 @@ import { loadAllCities } from "../store/slices/metadata.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
 import FullscreenLoader from "./ui/Loader";
-import { RoomType, IdealFor } from "../types/api.types";
+import { RoomType, IdealFor, GenderPreference } from "../types/api.types";
+import {
+  ROOM_TYPES,
+  IDEAL_FOR,
+  GENDER_PREFERENCE_OPTIONS,
+  GENDER_PREFERENCE_LABELS,
+} from "../constants/filterOptions";
 
 interface AddPropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEmailVerificationRequired?: (retry: () => void) => void;
 }
-
-const roomTypeOptions: RoomType[] = ["Single", "Shared", "PG", "1BHK", "2BHK"];
-const idealForOptions: IdealFor[] = [
-  "Students",
-  "Working Professionals",
-  "Family",
-];
 
 const inputClass =
   "w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-transparent focus:ring-4 focus:ring-amber-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-400 dark:focus:ring-amber-500/20";
@@ -109,6 +108,8 @@ export function AddPropertyModal({
     description: "",
     amenities: [] as string[],
     images: [] as string[],
+    // ✅ NEW: Gender preference field
+    genderPreference: "ANY" as GenderPreference,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -227,6 +228,8 @@ export function AddPropertyModal({
       description: "",
       amenities: [],
       images: [],
+      // ✅ NEW: Reset gender preference to default
+      genderPreference: "ANY",
     });
     setErrors({});
     setSearch("");
@@ -778,7 +781,7 @@ export function AddPropertyModal({
                         }
                         className={inputClass}
                       >
-                        {roomTypeOptions.map((option) => (
+                        {ROOM_TYPES.map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>
@@ -786,6 +789,48 @@ export function AddPropertyModal({
                       </select>
                     </div>
                   </div>
+                </SectionCard>
+
+                {/* ✅ NEW: Gender Preference Section */}
+                <SectionCard
+                  title="Who can rent?"
+                  subtitle="Specify if this property is available for anyone, boys only, or girls only."
+                  icon={<Users className="h-5 w-5" />}
+                >
+                  <fieldset
+                    ref={(el) => (fieldRefs.current.genderPreference = el)}
+                  >
+                    <legend className="sr-only">Gender Preference</legend>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {GENDER_PREFERENCE_OPTIONS.map((option) => (
+                        <label
+                          key={option}
+                          className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
+                            formData.genderPreference === option
+                              ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-500 dark:bg-amber-500/10 dark:ring-amber-500/20"
+                              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/60"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="genderPreference"
+                            value={option}
+                            checked={formData.genderPreference === option}
+                            onChange={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                genderPreference: option,
+                              }))
+                            }
+                            className="h-4 w-4 border-slate-300 text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {GENDER_PREFERENCE_LABELS[option]}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
                 </SectionCard>
 
                 <SectionCard
@@ -801,7 +846,7 @@ export function AddPropertyModal({
                     <legend className="sr-only">Ideal For</legend>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-                      {idealForOptions.map((option) => {
+                      {IDEAL_FOR.map((option) => {
                         const selected = formData.idealFor.includes(option);
 
                         return (

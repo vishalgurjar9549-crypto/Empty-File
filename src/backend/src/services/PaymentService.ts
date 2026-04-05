@@ -109,14 +109,29 @@ export class PaymentService {
         };
       }
 
-      // Already processed
-      if (payment.status === PaymentStatus.VERIFIED) {
-        logger.warn('Payment already processed', {
-          paymentId: payment.id
+      // ✅ SECURITY CHECK: Verify payment belongs to authenticated user
+      if (payment.tenantId !== userId) {
+        logger.error('SECURITY VIOLATION: Payment verification tenant mismatch', {
+          paymentId: payment.id,
+          expectedTenantId: payment.tenantId?.substring(0, 8) || 'unknown',
+          attemptingUserId: userId.substring(0, 8),
+          orderId: razorpay_order_id
         });
         return {
           success: false,
-          message: 'Payment already processed'
+          message: 'This payment does not belong to you'
+        };
+      }
+
+      // Already processed
+      if (payment.status === PaymentStatus.VERIFIED) {
+        logger.warn('Payment already processed', {
+          paymentId: payment.id,
+          tenantId: userId.substring(0, 8)
+        });
+        return {
+          success: true,
+          message: 'Payment already verified'
         };
       }
 

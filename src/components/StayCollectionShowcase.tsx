@@ -1,4 +1,4 @@
-import { Sparkles, Home, MapPin, Key } from "lucide-react";
+import { Sparkles, Home, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppSelector } from "../store/hooks";
 
@@ -28,15 +28,15 @@ export function StayCollectionShowcase() {
     return formatStatNumber(value);
   };
 
-  // Build stats display data - NO FAKE NUMBERS
+  // ✅ Build stats display data - ONLY REAL STATS
+  // Note: "Verified" stat removed as it's not calculable from real backend data
+  // Backend only provides: totalProperties, totalCities, totalOwners
   const statsData = stats ? [
     { icon: Home, value: getDisplayValue(stats.totalProperties), label: "Homes" },
     { icon: MapPin, value: getDisplayValue(stats.totalCities), label: "Cities" },
-    { icon: Key, value: getDisplayValue(Math.round((stats.totalProperties > 0 ? stats.totalProperties : 0) * 0.98)), label: "Verified" },
   ] : [
     { icon: Home, value: getDisplayValue(undefined), label: "Homes" },
     { icon: MapPin, value: getDisplayValue(undefined), label: "Cities" },
-    { icon: Key, value: getDisplayValue(undefined), label: "Verified" },
   ];
 
   return (
@@ -126,36 +126,11 @@ export function StayCollectionShowcase() {
           <div className="hidden sm:block w-px self-stretch" style={{ background: goldBorder }} />
           <div className="block sm:hidden w-full h-px" style={{ background: goldBorder }} />
 
-          {/* RIGHT — property cards, now 3 in a row on large screens */}
-          <div className="flex sm:flex-col lg:flex-row gap-2.5 w-full sm:w-auto sm:min-w-[200px] lg:min-w-[420px]">
-            {[
-              { label: "Luxury Villa",    loc: "Udaipur, RJ",  price: "₹4.2L/mo",  featured: true  },
-              { label: "Heritage Palace", loc: "Jodhpur, RJ",  price: "₹9.8L/mo",  featured: false },
-              { label: "Modern Flat",     loc: "Mumbai, MH",   price: "₹85K/mo",   featured: false },
-            ].map(({ label, loc, price, featured }) => (
-              <div
-                key={label}
-                className="flex-1 rounded-xl p-3.5 flex items-center gap-3 transition-all duration-200 hover:scale-[1.02]"
-                style={{
-                  background: featured ? goldSoft : "rgba(255,255,255,0.03)",
-                  border: `1px solid ${featured ? "rgba(212,175,55,0.3)" : goldBorder}`,
-                }}
-              >
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: "rgba(212,175,55,0.15)" }}
-                >
-                  <Home className="h-3.5 w-3.5" style={{ color: gold }} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[12px] font-semibold truncate" style={{ color: "#f0e6c8", fontFamily: "Georgia, serif" }}>
-                    {label}
-                  </p>
-                  <p className="text-[10px]" style={{ color: "rgba(240,230,200,0.4)" }}>{loc}</p>
-                  <p className="text-[12px] font-bold mt-0.5" style={{ color: gold }}>{price}</p>
-                </div>
-              </div>
-            ))}
+          {/* RIGHT — removed hardcoded cards, using CTAs only */}
+          <div className="flex sm:flex-col gap-2.5 w-full sm:w-auto">
+            <div className="text-sm text-slate-600 dark:text-slate-400" style={{ color: "rgba(240,230,200,0.6)" }}>
+              <p className="mb-3 italic">Real properties from verified owners across India</p>
+            </div>
           </div>
 
         </div>

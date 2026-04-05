@@ -15,7 +15,9 @@ import { emailService } from './EmailService';
  *
  * SECURITY:
  * - Code stored as SHA256 hash (never plaintext)
- * - Max 5 attempts per OTP
+ * - Max 3 attempts per OTP (brute force protection)
+ * - Progressive delays: 500ms → 1000ms → 2000ms (slow down attacks)
+ * - Generic error messages (don't reveal failure reason)
  * - Expires after 10 minutes
  * - Marked as used after successful verification
  */
@@ -23,7 +25,7 @@ export class OtpService {
   private prisma = getPrismaClient();
   private readonly OTP_LENGTH = 6;
   private readonly OTP_EXPIRY_MINUTES = 10;
-  private readonly MAX_ATTEMPTS = 5;
+  private readonly MAX_ATTEMPTS = 3; // ✅ SECURITY: Reduced from 5 to 3
 
   /**
    * Generate a random 6-digit OTP
@@ -126,7 +128,7 @@ export class OtpService {
           userId,
           email
         });
-        return { valid: false, reason: 'No active OTP found' };
+        return { valid: false, reason: 'Invalid OTP code' };
       }
 
       // Expired
@@ -136,7 +138,7 @@ export class OtpService {
           otpId: otp.id,
           expiresAt: otp.expiresAt
         });
-        return { valid: false, reason: 'OTP has expired' };
+        return { valid: false, reason: 'Invalid OTP code' };
       }
 
       // Max attempts exceeded
@@ -146,12 +148,16 @@ export class OtpService {
           otpId: otp.id,
           attempts: otp.attempts
         });
-        return { valid: false, reason: 'Too many attempts. Please request a new OTP.' };
+        return { valid: false, reason: 'Invalid OTP code' };
       }
 
       // Check code hash
       const enteredHash = this.hashCode(enteredCode);
       if (enteredHash !== otp.otpHash) {
+        // ✅ SECURITY: Add progressive delay before responding (slow down brute force)
+        const delayMs = Math.min(500 * Math.pow(2, otp.attempts), 5000); // 500ms, 1000ms, 2000ms
+        await new Promise(r => setTimeout(r, delayMs));
+
         // Increment attempts
         await this.prisma.emailOtp.update({
           where: { id: otp.id },
@@ -167,7 +173,7 @@ export class OtpService {
         return { valid: false, reason: 'Invalid OTP code' };
       }
 
-      // Valid! Mark as used
+      // ✅ Valid! Mark as used
       await this.prisma.emailOtp.update({
         where: { id: otp.id },
         data: { isUsed: true }
@@ -175,7 +181,7 @@ export class OtpService {
 
       logger.info('OTP verification successful', {
         userId,
-        email,
+        email: email.substring(0, 5) + '***', // Mask email in logs
         otpId: otp.id
       });
 

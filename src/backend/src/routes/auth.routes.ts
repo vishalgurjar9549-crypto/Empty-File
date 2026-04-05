@@ -9,6 +9,7 @@ import { userRepository } from "../repositories";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { validateBody } from "../middleware/validation.middleware";
 import { authRateLimiter } from "../middleware/security.middleware";
+import { otpVerifyLimiter } from "../middleware/productionSafety.middleware";
 
 import { generateToken } from "../utils/jwt";
 import { logger } from "../utils/logger";
@@ -232,8 +233,8 @@ router.post("/send-email-otp", authMiddleware, validateBody(SendEmailOtpSchema),
   authController.sendEmailOTP(req, res),
 );
 
-// Verify email OTP (requires auth)
-router.post("/verify-email-otp", authMiddleware, validateBody(VerifyEmailOtpSchema), (req, res) =>
+// Verify email OTP (🔒 Rate limited: 3 attempts/minute per email - production safety)
+router.post("/verify-email-otp", authMiddleware, validateBody(VerifyEmailOtpSchema), otpVerifyLimiter, (req, res) =>
   authController.verifyEmailOTP(req as any, res),
 );
 
@@ -246,8 +247,8 @@ router.post("/request-email-login-otp", validateBody(RequestEmailLoginOtpSchema)
   authController.requestEmailLoginOTP(req, res),
 );
 
-// Verify OTP and login via email
-router.post("/verify-email-login-otp", validateBody(VerifyEmailLoginOtpSchema), (req, res) =>
+// Verify OTP and login via email (🔒 Rate limited: 3 attempts/minute per email - production safety)
+router.post("/verify-email-login-otp", validateBody(VerifyEmailLoginOtpSchema), otpVerifyLimiter, (req, res) =>
   authController.verifyEmailLoginOTP(req, res),
 );
 

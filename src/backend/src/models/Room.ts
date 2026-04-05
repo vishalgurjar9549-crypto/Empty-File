@@ -1,8 +1,11 @@
 import { z } from "zod";
-export const RoomType = z.enum(["Single", "Shared", "PG", "1BHK", "2BHK"]);
+export const RoomType = z.enum(["Single", "Shared", "PG", "1RK", "2RK", "1BHK", "2BHK", "3BHK", "4BHK", "Independent House"]);
 export const IdealFor = z.enum(["Students", "Working Professionals", "Family"]);
+// ✅ NEW: Gender preference for property restrictions
+export const GenderPreference = z.enum(["ANY", "MALE_ONLY", "FEMALE_ONLY"]);
 export type RoomType = z.infer<typeof RoomType>;
 export type IdealFor = z.infer<typeof IdealFor>;
+export type GenderPreference = z.infer<typeof GenderPreference>;
 export interface Room {
   id: string;
   title: string;
@@ -10,8 +13,8 @@ export interface Room {
   city: string;
   location: string;
   landmark: string;
-  latitude?: number | null; // Optional geographic latitude for map feature
-  longitude?: number | null; // Optional geographic longitude for map feature
+  latitude?: number | null;
+  longitude?: number | null;
   pricePerMonth: number;
   roomType: RoomType;
   idealFor: IdealFor[];
@@ -20,8 +23,10 @@ export interface Room {
   rating: number;
   reviewsCount: number;
   isPopular: boolean;
-  isVerified?: boolean; // kept for backward compat (deprecated)
-  reviewStatus?: string; // ✅ FIX 3: expose reviewStatus to frontend/consumers
+  isVerified?: boolean;
+  reviewStatus?: string;
+  // ✅ NEW: Gender preference for property rentals
+  genderPreference?: GenderPreference;
   adminFeedback?: {
     reason: string;
     reasonLabel: string;
@@ -72,11 +77,25 @@ export const CreateRoomSchema = z.object({
   idealFor: z.array(IdealFor).min(1, "Please select at least one tenant type"),
   amenities: z.array(z.string()).default([]),
   images: z.array(z.string()).min(1, "At least one image is required"),
+  // ✅ NEW: Gender preference validation
+  genderPreference: GenderPreference.default("ANY"),
 });
 export const UpdateRoomSchema = CreateRoomSchema.partial();
 export const RoomFiltersSchema = z.object({
   city: z.string().trim().min(1).optional(),
   roomType: z.string().trim().min(1).optional(),
+  // ✅ Multi-select room types (array or comma-separated string)
+  roomTypes: z.union([
+    z.array(z.string().trim().min(1)),
+    z.string().trim().min(1)
+  ]).optional(),
+  // ✅ NEW: Ideal for multi-select filter (array or comma-separated string)
+  idealFor: z.union([
+    z.array(IdealFor),
+    z.string().trim().min(1)
+  ]).optional(),
+  // ✅ NEW: Gender preference filter
+  genderPreference: GenderPreference.optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
   maxPrice: z.coerce.number().nonnegative().optional(),
   sort: z
@@ -84,6 +103,7 @@ export const RoomFiltersSchema = z.object({
     .default("latest"),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().optional(),
 }).strict();
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;

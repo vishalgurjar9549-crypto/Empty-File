@@ -10,7 +10,19 @@ export const roomsApi = {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
+        // ✅ Handle array parameters specially (convert to CSV string)
+        // Also filter out empty values from arrays
+        if ((key === 'roomTypes' || key === 'idealFor') && Array.isArray(value)) {
+          if (value.length > 0) {
+            // Filter out empty/null values from array
+            const filtered = (value as any[])
+              .map(v => String(v).trim())
+              .filter(v => v.length > 0);
+            if (filtered.length > 0) {
+              params.append(key, filtered.join(','));
+            }
+          }
+        } else if (value !== undefined && value !== null && value !== '') {
           params.append(key, String(value));
         }
       });

@@ -4,13 +4,19 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { RoomFilters } from '../models/Room';
 import { logger } from '../utils/logger';
 import { normalizeCity } from '../utils/normalize';
+import { getCacheService, CacheService } from '../services/CacheService';
 
-const ROOM_TYPE_MAP: Record<string, "Single" | "Shared" | "PG" | "1BHK" | "2BHK"> = {
+const ROOM_TYPE_MAP: Record<string, "Single" | "Shared" | "PG" | "1RK" | "2RK" | "1BHK" | "2BHK" | "3BHK" | "4BHK" | "Independent House"> = {
   single: "Single",
   shared: "Shared",
   pg: "PG",
+  "1rk": "1RK",
+  "2rk": "2RK",
   "1bhk": "1BHK",
   "2bhk": "2BHK",
+  "3bhk": "3BHK",
+  "4bhk": "4BHK",
+  "independent house": "Independent House",
 };
 export class RoomController {
   constructor(private roomService: RoomService) {
@@ -35,8 +41,18 @@ export class RoomController {
         ownerId: req.user!.userId
       });
       logger.info('Room created successfully', {
-        roomId: room.id
+        roomId: room.id,
+        city: room.city
       });
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // New property should appear immediately in listings
+      const cache = getCacheService();
+      cache.clearCityCache(room.city);
+      logger.info('Cache cleared for city after room creation', {
+        city: room.city
+      });
+      
       res.status(201).json({
         success: true,
         data: room,
@@ -93,20 +109,86 @@ export class RoomController {
         typeof req.query.sort === 'string' && req.query.sort.trim().length > 0
           ? req.query.sort.trim()
           : 'latest';
+      
+      // ✅ Extract gender preference parameter with validation
+      let genderPrefParam: string | undefined = undefined;
+      if (typeof req.query.genderPreference === 'string') {
+        const validGenders = ['ANY', 'MALE_ONLY', 'FEMALE_ONLY'];
+        const trimmed = req.query.genderPreference.trim().toUpperCase();
+        if (validGenders.includes(trimmed)) {
+          genderPrefParam = trimmed;
+        }
+      }
+      
+      // ✅ Extract ideal for multi-select parameter with validation
+      let idealForParam: string[] | undefined = undefined;
+      if (req.query.idealFor) {
+        const VALID_IDEAL_FOR = ["Students", "Working Professionals", "Family"];
+        if (Array.isArray(req.query.idealFor)) {
+          // Multiple query params: ?idealFor=Students&idealFor=Family
+          idealForParam = (req.query.idealFor as string[])
+            .map(v => String(v).trim())
+            .filter(v => v.length > 0 && VALID_IDEAL_FOR.includes(v));
+        } else if (typeof req.query.idealFor === 'string') {
+          // Single param or comma separated: ?idealFor=Students,Family
+          idealForParam = req.query.idealFor
+            .trim()
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length > 0 && VALID_IDEAL_FOR.includes(v));
+        }
+      }
+      
+      // ✅ CURSOR PAGINATION: Use cursor instead of page
+      const cursorParam = typeof req.query.cursor === 'string' 
+        ? req.query.cursor.trim() 
+        : undefined;
+      
       const filters: RoomFilters = {
+        // Legacy page support (convert to cursor in repository)
         page: Number(req.query.page ?? 1),
         limit: Number(req.query.limit ?? 20),
         city: normalizedCity,
         roomType: normalizedRoomType,
         sort: sortParam as RoomFilters["sort"],
         minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
-        maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined
+        maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined,
+        // ✅ NEW: Add gender preference to filters
+        genderPreference: genderPrefParam as any,
+        // ✅ NEW: Add ideal for to filters (cast as IdealFor array)
+        idealFor: (idealForParam as any) || undefined,
+        // ✅ CURSOR PAGINATION: Add cursor to filters
+        cursor: cursorParam
       };
+
+      // ✅ CACHING: Check if response is cached
+      const cache = getCacheService();
+      const cacheKey = CacheService.generateKey(filters);
+      const cachedResult = cache.get<any>(cacheKey);
+      
+      if (cachedResult) {
+        logger.info('Cache HIT for getAllRooms');
+        return res.json({
+          success: true,
+          data: cachedResult?.rooms || [],
+          meta: {
+            page: cachedResult?.page || filters.page,
+            limit: cachedResult?.limit || filters.limit,
+            total: cachedResult?.total || 0,
+            hasNextPage: cachedResult?.hasNextPage || false,
+            ...(cachedResult?.nextCursor ? { nextCursor: cachedResult.nextCursor } : {})
+          }
+        });
+      }
 
       // ✅ FIX 2: Pass requester role so service can apply role-aware visibility.
       // req.user is populated by authMiddleware if a token is present; undefined for public requests.
       const requesterRole = (req as AuthRequest).user?.role;
       const result = await this.roomService.getAllRooms(filters, requesterRole);
+      
+      // ✅ CACHING: Store result in cache (30 second TTL)
+      cache.set(cacheKey, result, 30000);
+      
       res.json({
         success: true,
         data: result.rooms,
@@ -198,6 +280,16 @@ export class RoomController {
       // ✅ FIX 1: Pass requester role so service can decide whether to reset reviewStatus.
       const requesterRole = req.user?.role;
       const room = await this.roomService.updateRoom(id, ownerId, req.body, requesterRole);
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Updated property should reflect immediately
+      const cache = getCacheService();
+      cache.clearCityCache(room.city);
+      logger.info('Cache cleared for city after room update', {
+        roomId: id,
+        city: room.city
+      });
+      
       res.json(room);
     } catch (error: any) {
       res.status(400).json({
@@ -216,8 +308,28 @@ export class RoomController {
           message: 'User not authenticated'
         });
       }
+      
       const requesterRole = req.user?.role;
+      
+      // ✅ CACHE INVALIDATION: Get room before deleting to know the city
+      const room = await this.roomService.getRoomById(id, requesterRole);
+      if (!room) {
+        return res.status(404).json({
+          message: 'Room not found'
+        });
+      }
+      
       await this.roomService.deleteRoom(id, ownerId, requesterRole);
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Deleted property should disappear immediately from listings
+      const cache = getCacheService();
+      cache.clearCityCache(room.city);
+      logger.info('Cache cleared for city after room deletion', {
+        roomId: id,
+        city: room.city
+      });
+      
       res.status(204).send();
     } catch (error: any) {
       res.status(400).json({
@@ -254,6 +366,17 @@ export class RoomController {
       }
       const requesterRole = req.user?.role;
       const room = await this.roomService.toggleRoomStatus(id, ownerId, requesterRole);
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Room status change (active/inactive) affects visibility in listings
+      const cache = getCacheService();
+      cache.clearCityCache(room.city);
+      logger.info('Cache cleared for city after room status toggle', {
+        roomId: id,
+        city: room.city,
+        isActive: room.isActive
+      });
+      
       res.json({
         success: true,
         data: room,
@@ -285,6 +408,17 @@ export class RoomController {
         ownerId
       });
       const room = await this.roomService.resubmitForReview(id, ownerId, requesterRole);
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Property status/review changes affect visibility
+      const cache = getCacheService();
+      cache.clearCityCache(room.city);
+      logger.info('Cache cleared for city after room resubmit', {
+        roomId: id,
+        city: room.city,
+        reviewStatus: room.reviewStatus
+      });
+      
       res.json({
         success: true,
         data: room,

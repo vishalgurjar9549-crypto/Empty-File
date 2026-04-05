@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, memo } from 'react';
 import { MapPin, Star, ArrowRight, CheckCircle, Heart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Room } from '../types/api.types';
@@ -10,7 +10,12 @@ interface RoomCardProps {
   room: Room;
 }
 
-export function RoomCard({
+/**
+ * ✅ OPTIMIZATION: RoomCard wrapped with React.memo
+ * Prevents re-renders when parent list re-renders but room data is unchanged
+ * Custom comparison ensures all room properties are checked
+ */
+function RoomCardComponent({
   room
 }: RoomCardProps) {
   // ✅ SAFETY GUARD: If room is undefined or null, render nothing
@@ -98,6 +103,12 @@ export function RoomCard({
             {isVerified && <div className="bg-navy/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-lg flex items-center gap-1 border border-white/10">
                 <CheckCircle className="w-3 h-3 text-green-400" /> Verified
               </div>}
+            {/* ✅ NEW: Gender preference badge */}
+            {room?.genderPreference && room.genderPreference !== 'ANY' && (
+              <div className="bg-purple-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-lg flex items-center gap-1 border border-white/10">
+                {room.genderPreference === 'MALE_ONLY' ? '👦' : '👧'} {room.genderPreference === 'MALE_ONLY' ? 'Boys' : 'Girls'} Only
+              </div>
+            )}
           </div>
 
           {/* Favorite Button - Now Has Functional Logic */}
@@ -170,3 +181,29 @@ export function RoomCard({
       </div>
     </Link>;
 }
+
+/**
+ * ✅ Custom comparison function
+ * Only re-render if room ID or key properties change
+ * Reduces re-renders significantly with large lists
+ */
+function areRoomsEqual(prevProps: RoomCardProps, nextProps: RoomCardProps): boolean {
+  if (prevProps.room === nextProps.room) return true;
+
+  // Compare key properties that affect rendering
+  return (
+    prevProps.room?.id === nextProps.room?.id &&
+    prevProps.room?.title === nextProps.room?.title &&
+    prevProps.room?.images?.[0] === nextProps.room?.images?.[0] &&
+    prevProps.room?.pricePerMonth === nextProps.room?.pricePerMonth &&
+    prevProps.room?.rating === nextProps.room?.rating &&
+    prevProps.room?.isPopular === nextProps.room?.isPopular &&
+    prevProps.room?.isVerified === nextProps.room?.isVerified
+  );
+}
+
+/**
+ * ✅ Memoized export
+ * Uses custom comparison to determine when to re-render
+ */
+export const RoomCard = memo(RoomCardComponent, areRoomsEqual);

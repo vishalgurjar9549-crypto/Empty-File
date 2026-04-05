@@ -56,8 +56,10 @@ export interface LoginInput {
 }
 
 // Room Types
-export type RoomType = 'Single' | 'Shared' | 'PG' | '1BHK' | '2BHK';
+export type RoomType = 'Single' | 'Shared' | 'PG' | '1RK' | '2RK' | '1BHK' | '2BHK' | '3BHK' | '4BHK' | 'Independent House';
 export type IdealFor = 'Students' | 'Working Professionals' | 'Family';
+// ✅ NEW: Gender preference for property rentals
+export type GenderPreference = 'ANY' | 'MALE_ONLY' | 'FEMALE_ONLY';
 
 // Review Status for Admin Moderation
 export type ReviewStatus = 'draft' // Owner only
@@ -85,8 +87,8 @@ export interface Room {
   city: string;
   location: string;
   landmark: string;
-  latitude?: number | null;    // Geographic latitude for map (-90 to 90)
-  longitude?: number | null;   // Geographic longitude for map (-180 to 180)
+  latitude?: number | null;
+  longitude?: number | null;
   pricePerMonth: number;
   roomType: RoomType;
   idealFor: IdealFor[];
@@ -100,17 +102,16 @@ export interface Room {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
-  // Admin Review Fields
+  // ✅ NEW: Gender preference for property rentals
+  genderPreference?: GenderPreference;
   reviewStatus?: ReviewStatus;
   adminFeedback?: AdminFeedback;
   demand?: {
     weeklyViews: number;
     weeklyContacts: number;
   };
-  // ==================== CONTACT TRACKING (PROMPT 1) ====================
   lastContactedAt?: string | null;
   contactCount?: number;
-  // ==================== ENGAGEMENT TRACKING (PROMPT 2) ====================
   lastPropertyUpdateAt?: string | null;
 }
 export interface RoomFilters {
@@ -118,6 +119,12 @@ export interface RoomFilters {
   minPrice?: string;
   maxPrice?: string;
   roomType?: string;
+  // ✅ Multi-select room types (array)
+  roomTypes?: string[];
+  // ✅ NEW: Ideal for multi-select filter (array)
+  idealFor?: string[];
+  // ✅ NEW: Gender preference filter
+  genderPreference?: GenderPreference;
   sort?: string;
   page?: number;
   limit?: number;
@@ -129,13 +136,15 @@ export interface CreateRoomInput {
   city: string;
   location: string;
   landmark?: string;
-  latitude?: number | null;    // Optional: Geographic latitude (-90 to 90)
-  longitude?: number | null;   // Optional: Geographic longitude (-180 to 180)
+  latitude?: number | null;
+  longitude?: number | null;
   pricePerMonth: number;
   roomType: RoomType;
   idealFor: IdealFor[];
   amenities: string[];
   images: string[];
+  // ✅ NEW: Gender preference for property rentals
+  genderPreference?: GenderPreference;
 }
 export type UpdateRoomInput = Partial<CreateRoomInput>;
 

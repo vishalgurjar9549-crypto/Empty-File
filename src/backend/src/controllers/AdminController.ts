@@ -3,6 +3,7 @@ import { Prisma, Role } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { getPrismaClient } from "../utils/prisma";
 import { logger } from "../utils/logger";
+import { getCacheService } from "../services/CacheService";
 
 // FIXED: Use singleton instead of new PrismaClient()
 const prisma = getPrismaClient();
@@ -314,6 +315,16 @@ export class AdminController {
           }
         }
       });
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Approved property should become visible immediately
+      const cache = getCacheService();
+      cache.clearCityCache(updated.city);
+      logger.info(`Cache cleared for city after property approval`, {
+        roomId: id,
+        city: updated.city
+      });
+      
       const transformed = {
         ...updated,
         reviewStatus: updated.reviewStatus?.toLowerCase() || "approved"
@@ -373,6 +384,16 @@ export class AdminController {
           }
         }
       });
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Rejected property should disappear from listings immediately
+      const cache = getCacheService();
+      cache.clearCityCache(property.city);
+      logger.info(`Cache cleared for city after property rejection`, {
+        roomId: id,
+        city: property.city
+      });
+      
       logger.info(`Admin: Rejected property ${id}`);
       res.json({
         success: true,
@@ -429,6 +450,16 @@ export class AdminController {
           }
         }
       });
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Property status change affects visibility in listings
+      const cache = getCacheService();
+      cache.clearCityCache(property.city);
+      logger.info(`Cache cleared for city after correction request`, {
+        roomId: id,
+        city: property.city
+      });
+      
       logger.info(`Admin: Requested correction for property ${id}`);
       res.json({
         success: true,
@@ -484,6 +515,16 @@ export class AdminController {
           }
         }
       });
+      
+      // ✅ CACHE INVALIDATION: Clear cached listings for this city
+      // Suspended property should disappear from listings immediately
+      const cache = getCacheService();
+      cache.clearCityCache(property.city);
+      logger.info(`Cache cleared for city after property suspension`, {
+        roomId: id,
+        city: property.city
+      });
+      
       logger.info(`Admin: Suspended property ${id}`);
       res.json({
         success: true,

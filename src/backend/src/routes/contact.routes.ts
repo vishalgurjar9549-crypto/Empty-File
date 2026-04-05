@@ -3,6 +3,7 @@ import { ContactController } from '../controllers/ContactController';
 import { ContactService } from '../services/ContactService';
 import { PlanLimitService } from '../services/PlanLimitService';
 import { authMiddleware, authorizeRoles } from '../middleware/auth.middleware';
+import { contactUnlockLimiter } from '../middleware/productionSafety.middleware';
 import { Role } from '@prisma/client';
 const router = Router();
 const planLimitService = new PlanLimitService();
@@ -24,6 +25,7 @@ router.get('/:roomId', authMiddleware, authorizeRoles(Role.TENANT), (req, res, n
  * Body: { roomId: string }
  * Returns: { ownerName, ownerPhone, ownerEmail }
  * ⚠️ WRITE path — SERIALIZABLE transaction, limit enforcement, dedup
+ * 🔒 Rate limited: 5 requests/minute per user (production safety)
  */
-router.post('/unlock', authMiddleware, authorizeRoles(Role.TENANT), (req, res, next) => contactController.unlockContact(req as any, res));
+router.post('/unlock', authMiddleware, authorizeRoles(Role.TENANT), contactUnlockLimiter, (req, res, next) => contactController.unlockContact(req as any, res));
 export default router;

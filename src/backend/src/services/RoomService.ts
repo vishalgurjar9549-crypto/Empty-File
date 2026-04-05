@@ -408,21 +408,21 @@ export class RoomService {
       throw new Error(`Cannot resubmit property with status ${room.reviewStatus}. Only properties with "NEEDS_CORRECTION" status can be resubmitted.`);
     }
 
-    // Update room status to PENDING_REVIEW
+    // Update room status to PENDING for resubmission
     const prisma = getPrismaClient();
     const updatedRoom = await prisma.room.update({
       where: { id },
       data: {
-        reviewStatus: ReviewStatus.PENDING_REVIEW
+        reviewStatus: ReviewStatus.PENDING
       }
     });
 
     logger.info('Property resubmitted successfully', {
       roomId: id,
-      newStatus: ReviewStatus.PENDING_REVIEW
+      newStatus: ReviewStatus.PENDING
     });
 
-    return updatedRoom as Room;
+    return updatedRoom as unknown as Room;
   }
 
   //   async toggleRoomStatus(id: string, ownerId: string): Promise<Room> {

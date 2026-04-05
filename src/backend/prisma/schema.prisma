@@ -67,6 +67,8 @@ model Room {
   isActive                 Boolean                   @default(true)
   isPopular                Boolean                   @default(false)
   adminFeedback            Json?
+  // ✅ NEW: Gender preference restriction
+  genderPreference         String                    @default("ANY")
   ownerId                  String
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
@@ -89,12 +91,18 @@ model Room {
 
   @@index([city])
   @@index([roomType])
+  @@index([genderPreference])
   @@index([pricePerMonth])
   @@index([ownerId])
   @@index([reviewStatus])
   @@index([isActive])
   @@index([lastContactedAt])
   @@index([contactCount])
+  // ✅ CRITICAL COMPOSITE INDEXES for scaling to 20,000+ users
+  // These enable fast filtering on common query patterns
+  @@index([city, createdAt(sort: Desc)], map: "idx_room_city_created_desc")
+  @@index([city, pricePerMonth], map: "idx_room_city_price")
+  @@index([idealFor], map: "idx_room_ideal_for")
 }
 
 model Event {

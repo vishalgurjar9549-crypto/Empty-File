@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { CityPillSkeleton } from "./ui/SkeletonLoader";
+import { getCityImage } from "../utils/cityImages";
 
 type BackendCity = {
   id: string | number;
@@ -42,14 +43,15 @@ function chunkIntoTwoRows(items: CityItem[]) {
 
 function mergeCitiesWithoutFallback(cities?: BackendCity[]): CityItem[] {
   // ✅ STEP 2: NO FALLBACK TO FAKE DATA
-  // Use only real backend data
+  // Use only real backend data with city images
   const backendCities: CityItem[] =
     cities?.map((city, index) => ({
       id: city.id ?? city.name ?? `city-${index}`,
       name: city.name,
       state: city.state || "Popular destination",
       totalListings: city.totalListings,
-      image: city.image || "", // Empty string if no image
+      // ✅ Use getCityImage to provide real city images
+      image: city.image || getCityImage(city.name),
     })) ?? [];
 
   return backendCities;
