@@ -203,6 +203,23 @@ export function RoomsListing() {
   ]);
 
   /* =============================
+     FILTER KEY - STABLE DEPENDENCY FOR useEffect
+     ✅ FIX: Create string key instead of object reference
+  ============================== */
+  const filterKey = useMemo(() => {
+    return JSON.stringify({
+      city: appliedFilters.city || "",
+      minPrice: appliedFilters.minPrice || "",
+      maxPrice: appliedFilters.maxPrice || "",
+      roomType: appliedFilters.roomType || "",
+      roomTypes: appliedFilters.roomTypes || [],
+      genderPreference: appliedFilters.genderPreference || "",
+      idealFor: appliedFilters.idealFor || [],
+      sort: sortBy,
+    });
+  }, [appliedFilters, sortBy]);
+
+  /* =============================
      APPLY FILTERS - useCallback for optimization
   ============================== */
   const handleApplyFilters = useCallback((newFilters: any) => {
@@ -216,34 +233,53 @@ export function RoomsListing() {
 
   /* =============================
      REMOVE FILTER CHIP - useCallback for optimization
+     ✅ FIX: No dependencies - uses functional setState
   ============================== */
   const handleRemoveFilter = useCallback(
     (key: string) => {
-      const updated = { ...appliedFilters };
+      setAppliedFilters((prev) => {
+        const updated = { ...prev };
 
-      if (key === "roomType") {
-        updated.roomType = "";
-      } else if (key === "roomTypes") {
-        // ✅ NEW: Clear multi-select room types
-        updated.roomTypes = [];
-      } else if (key === "idealFor") {
-        // ✅ NEW: Clear ideal for array
-        updated.idealFor = [];
-      } else if (key === "price") {
-        updated.minPrice = "";
-        updated.maxPrice = "";
-      } else if (key === "genderPreference") {
-        // ✅ NEW: Clear gender preference
-        updated.genderPreference = "";
-      } else {
-        (updated as any)[key] = "";
-      }
+        if (key === "roomType") {
+          updated.roomType = "";
+        } else if (key === "roomTypes") {
+          updated.roomTypes = [];
+        } else if (key === "idealFor") {
+          updated.idealFor = [];
+        } else if (key === "price") {
+          updated.minPrice = "";
+          updated.maxPrice = "";
+        } else if (key === "genderPreference") {
+          updated.genderPreference = "";
+        } else {
+          (updated as any)[key] = "";
+        }
 
-      setAppliedFilters(updated);
-      setFilters(updated);
+        return updated;
+      });
+
+      setFilters((prev) => {
+        const updated = { ...prev };
+        if (key === "roomType") {
+          updated.roomType = "";
+        } else if (key === "roomTypes") {
+          updated.roomTypes = [];
+        } else if (key === "idealFor") {
+          updated.idealFor = [];
+        } else if (key === "price") {
+          updated.minPrice = "";
+          updated.maxPrice = "";
+        } else if (key === "genderPreference") {
+          updated.genderPreference = "";
+        } else {
+          (updated as any)[key] = "";
+        }
+        return updated;
+      });
+
       setPage(1);
     },
-    [appliedFilters],
+    [], // ✅ No dependencies - uses functional setState
   );
 
   /* =============================
@@ -356,32 +392,49 @@ export function RoomsListing() {
   }, [nextCursor, loadingMore, hasMore, apiFilters, dispatch, loading.fetch]);
 
   /* =============================
-     FETCH DATA - SINGLE EFFECT (FIX FOR TRIPLE DISPATCH)
+     FETCH DATA - STABILIZED DEPENDENCIES (FIX FOR INFINITE LOOP)
+     ✅ FIX #2: Use filterKey string instead of apiFilters object
+     ✅ FIX #3: Add mount guard to prevent double fetch
   ============================== */
   const isFetchingRef = useRef(false);
-  const prevKeyRef = useRef<string | null>(null);
+  const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // ✅ FIX #1: Skip if already fetching
-    if (isFetchingRef.current) return;
-
-    const key = JSON.stringify(apiFilters);
-
-    // ✅ FIX #2: Reset scroll state when filters/sort change
-    if (prevKeyRef.current !== key) {
-      setAllRooms([]);
-      setHasMore(true);
-      setLoadingMore(false);
-      prevKeyRef.current = key;
+    // ✅ FIX #3.1: Guard - skip if already fetching
+    if (isFetchingRef.current) {
+      console.log("[RoomsListing] Skipping fetch - already fetching");
+      return;
     }
 
+    // ✅ FIX #3.2: Guard - skip if filterKey hasn't actually changed
+    if (lastFetchKeyRef.current === filterKey) {
+      console.log("[RoomsListing] Skipping fetch - filterKey unchanged");
+      return;
+    }
+
+    // ✅ FIX #3.3: ACTUAL FILTER CHANGE detected
+    console.log("[RoomsListing] Filters changed, resetting scroll state", {
+      newKey: filterKey,
+      oldKey: lastFetchKeyRef.current,
+    });
+
+    // Reset scroll pagination when filters change
+    setAllRooms([]);
+    setHasMore(true);
+    setLoadingMore(false);
+    setNextCursor(undefined);
+
+    // Mark key as fetched BEFORE dispatch
+    lastFetchKeyRef.current = filterKey;
     isFetchingRef.current = true;
+
     console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
 
+    // Dispatch fetch
     dispatch(fetchRooms(apiFilters)).finally(() => {
       isFetchingRef.current = false;
     });
-  }, [dispatch, apiFilters]);
+  }, [filterKey, apiFilters, dispatch]); // ✅ filterKey as primary dependency (stable string)
 
   /* =============================
      INFINITE SCROLL OBSERVER SETUP
