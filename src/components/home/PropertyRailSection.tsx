@@ -4,13 +4,14 @@
  * ✅ STEP 2: REMOVE DUMMY DATA
  * ✅ STEP 3: NO DATA MIXING
  * ✅ STEP 4: NO FAKE FALLBACK VALUES
- * 
+ * ✅ STEP 5: STABILIZED EFFECTS - Only run on mount, not on every render
+ *
  * Uses ONLY homeSections.featured
  * Shows skeletons while loading
  * Real values only (no fake prices/ratings)
  */
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { PropertyRail } from "./PropertyRail";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchFeaturedSection } from "../../store/slices/homeSections.slice";
@@ -18,17 +19,27 @@ import { mapRoomToProperty } from "../../utils/propertyUtils";
 
 export function PropertyRailSection() {
   const dispatch = useAppDispatch();
-  
+
   // ✅ TASK 1: Use ONLY homeSections.featured
   // NOT global state.rooms
   const featured = useAppSelector((state) => state.homeSections.featured);
 
+  // ✅ FIX: Track if we've already initiated fetch to prevent re-runs
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
-    // Lazy load on mount
+    // ✅ FIX: Only fetch if:
+    // 1. We haven't fetched yet
+    // 2. Data is empty AND not currently loading AND no error
+    if (hasFetchedRef.current) {
+      return;
+    }
+
     if (featured.rooms.length === 0 && !featured.loading && !featured.error) {
+      hasFetchedRef.current = true;
       dispatch(fetchFeaturedSection());
     }
-  }, [dispatch, featured.rooms.length, featured.loading, featured.error]);
+  }, [dispatch]); // ✅ FIX: Only depend on dispatch - effect runs once on mount
 
   // ✅ Group rooms by city from featured data ONLY
   const groupedRails = useMemo(() => {
