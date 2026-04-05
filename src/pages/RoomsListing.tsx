@@ -356,48 +356,32 @@ export function RoomsListing() {
   }, [nextCursor, loadingMore, hasMore, apiFilters, dispatch, loading.fetch]);
 
   /* =============================
-     FETCH DATA (STRICT MODE SAFE)
+     FETCH DATA - SINGLE EFFECT (FIX FOR TRIPLE DISPATCH)
   ============================== */
   const isFetchingRef = useRef(false);
-  const fetchedRef = useRef(false);
+  const prevKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // ✅ FIX #1: Skip if already fetching
     if (isFetchingRef.current) return;
 
+    const key = JSON.stringify(apiFilters);
+
+    // ✅ FIX #2: Reset scroll state when filters/sort change
+    if (prevKeyRef.current !== key) {
+      setAllRooms([]);
+      setHasMore(true);
+      setLoadingMore(false);
+      prevKeyRef.current = key;
+    }
+
     isFetchingRef.current = true;
+    console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
 
     dispatch(fetchRooms(apiFilters)).finally(() => {
       isFetchingRef.current = false;
     });
   }, [dispatch, apiFilters]);
-  useEffect(() => {
-    console.log("[RoomsListing] Fetch triggered:", apiFilters);
-
-    dispatch(fetchRooms(apiFilters));
-  }, [dispatch, apiFilters]);
-  const prevKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const key = JSON.stringify(apiFilters);
-
-    if (prevKeyRef.current !== key) {
-      fetchedRef.current = false;
-      // ✅ RESET INFINITE SCROLL on filter/sort change
-      setAllRooms([]);
-      setHasMore(true);
-      setLoadingMore(false);
-    }
-
-    if (fetchedRef.current) return;
-
-    // ✅ DEBUG: Log fetch initiation
-    console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
-
-    fetchedRef.current = true;
-    prevKeyRef.current = key;
-
-    dispatch(fetchRooms(apiFilters));
-  }, [apiFilters, dispatch]);
 
   /* =============================
      INFINITE SCROLL OBSERVER SETUP
@@ -426,6 +410,7 @@ export function RoomsListing() {
 
   /* =============================
      INTERSECTION OBSERVER for sentinel
+     ✅ FIX #3: Don't depend on fetchNextPage to prevent re-setup
   ============================== */
   useEffect(() => {
     if (!sentinelRef.current) return;
@@ -433,12 +418,13 @@ export function RoomsListing() {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
+        // Use closure to capture current state values
         if (
           entry.isIntersecting &&
           hasMore &&
           !loadingMore &&
           !loading.fetch &&
-          !isFetchingRef.current // ✅ CRITICAL
+          !isFetchingRef.current
         ) {
           console.log("[RoomsListing] Sentinel visible - fetching next page");
           fetchNextPage();
@@ -446,7 +432,7 @@ export function RoomsListing() {
       },
       {
         root: null,
-        rootMargin: "100px", // Start loading 100px before reaching bottom
+        rootMargin: "100px",
         threshold: 0.1,
       },
     );
@@ -458,7 +444,7 @@ export function RoomsListing() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, loadingMore, loading.fetch, fetchNextPage]);
+  }, [hasMore, loadingMore, loading.fetch]); // ✅ Removed fetchNextPage from deps
 
   // ✅ DEBUG: Log state changes
   useEffect(() => {
