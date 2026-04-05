@@ -395,24 +395,25 @@ export function RoomsListing() {
      FETCH DATA - STABILIZED DEPENDENCIES (FIX FOR INFINITE LOOP)
      ✅ FIX #2: Use filterKey string instead of apiFilters object
      ✅ FIX #3: Add mount guard to prevent double fetch
+     ✅ FIX #4: REMOVE apiFilters from dependency - only use filterKey
   ============================== */
   const isFetchingRef = useRef(false);
   const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // ✅ FIX #3.1: Guard - skip if already fetching
+    // ✅ FIX #4.1: Guard - skip if already fetching
     if (isFetchingRef.current) {
       console.log("[RoomsListing] Skipping fetch - already fetching");
       return;
     }
 
-    // ✅ FIX #3.2: Guard - skip if filterKey hasn't actually changed
+    // ✅ FIX #4.2: Guard - skip if filterKey hasn't actually changed
     if (lastFetchKeyRef.current === filterKey) {
       console.log("[RoomsListing] Skipping fetch - filterKey unchanged");
       return;
     }
 
-    // ✅ FIX #3.3: ACTUAL FILTER CHANGE detected
+    // ✅ FIX #4.3: ACTUAL FILTER CHANGE detected
     console.log("[RoomsListing] Filters changed, resetting scroll state", {
       newKey: filterKey,
       oldKey: lastFetchKeyRef.current,
@@ -431,10 +432,26 @@ export function RoomsListing() {
     console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
 
     // Dispatch fetch
+    // ✅ CRITICAL INSIGHT: apiFilters is SAFE to use without being in dependencies
+    //
+    // WHY? apiFilters useMemo depends on: [JSON.stringify(appliedFilters), sortBy, nextCursor]
+    // filterKey useMemo depends on: [appliedFilters, sortBy] (excludes nextCursor)
+    //
+    // INVARIANT: When filterKey changes → either appliedFilters or sortBy changed
+    //           → apiFilters MUST have changed too (same parent dependencies)
+    //
+    // nextCursor is NOT in filterKey because:
+    // - Cursor changes frequently during infinite scroll (not a filter change)
+    // - We don't want to re-fetch first page when cursor updates
+    // - When user changes filters, we reset nextCursor=undefined anyway
+    //
+    // RESULT: filterKey captures all meaningful filter changes
+    //         apiFilters auto-updates when filterKey updates
+    //         No infinite loop from object reference changes
     dispatch(fetchRooms(apiFilters)).finally(() => {
       isFetchingRef.current = false;
     });
-  }, [filterKey, apiFilters, dispatch]); // ✅ filterKey as primary dependency (stable string)
+  }, [filterKey, dispatch]); // ✅ FIX #4: Only stable string dependency + dispatch
 
   /* =============================
      INFINITE SCROLL OBSERVER SETUP
