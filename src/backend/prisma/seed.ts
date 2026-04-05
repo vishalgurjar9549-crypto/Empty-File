@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../utils/password';
-import { adminAssignmentService } from './services/AdminAssignmentService';
+import { hashPassword } from '../src/utils/password';
+import { adminAssignmentService } from '../src/services/AdminAssignmentService';
 const prisma = new PrismaClient();
 
 // ─── 150 Indian Cities ───────────────────────────────────────────────────────

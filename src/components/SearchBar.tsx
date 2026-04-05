@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { loadCities } from "../store/slices/metadata.slice";
+import { SEARCH_ROOM_TYPE_OPTIONS, SEARCH_BUDGET_OPTIONS } from "../constants/filterOptions";
 
 const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
 
@@ -419,20 +420,10 @@ export function SearchBar() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [cities]);
 
-  const propertyOptions: Option[] = [
-    { label: "Single Room", value: "single" },
-    { label: "Shared Room", value: "shared" },
-    { label: "PG", value: "pg" },
-    { label: "1 BHK", value: "1bhk" },
-    { label: "2 BHK", value: "2bhk" },
-  ];
-
-  const budgetOptions: Option[] = [
-    { label: "Under ₹10k", value: "0-10000" },
-    { label: "₹10k – ₹20k", value: "10000-20000" },
-    { label: "₹20k – ₹40k", value: "20000-40000" },
-    { label: "₹40k+", value: "40000-100000" },
-  ];
+  // ✅ CENTRALIZED: Use shared filter constants instead of hardcoded values
+  // This ensures consistency across all components (SearchBar, FilterSidebar, Modals)
+  const propertyOptions = SEARCH_ROOM_TYPE_OPTIONS;
+  const budgetOptions = SEARCH_BUDGET_OPTIONS;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
