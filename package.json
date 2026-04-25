@@ -32,7 +32,6 @@
     "express-rate-limit": "latest",
     "framer-motion": "^11.5.4",
     "helmet": "latest",
-    "ioredis": "latest",
     "jsonwebtoken": "latest",
     "lucide-react": "0.522.0",
     "mapbox-gl": "^3.20.0",

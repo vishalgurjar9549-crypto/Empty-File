@@ -1,5 +1,5 @@
 import axiosInstance from './axios';
-import { ApiResponse, User, Room, FeedbackReason, FeedbackSeverity } from '../types/api.types';
+import { ApiResponse, User, Room, FeedbackReason, FeedbackSeverity, PaginationMeta } from '../types/api.types';
 import { PropertyAssignment, TenantAssignment } from '../types/admin.types';
 import { assertValidParam } from '../utils/apiGuard';
 export interface AdminStats {
@@ -23,16 +23,27 @@ export const adminApi = {
     const response = await axiosInstance.get<ApiResponse<AdminStats>>('/admin/stats');
     return response.data.data;
   },
-  // Get all users
+  // Get all users (with pagination metadata support)
   getAllUsers: async (filters?: {
     role?: string;
     status?: string;
     search?: string;
-  }): Promise<User[]> => {
+    page?: number;
+    limit?: number;
+    sort?: string;
+    cursor?: string;
+  }, signal?: AbortSignal): Promise<{ users: User[]; meta: PaginationMeta | null }> => {
     const response = await axiosInstance.get<ApiResponse<User[]>>('/admin/users', {
-      params: filters
+      params: filters,
+      signal
     });
-    return response.data.data;
+    // ✅ Handle both paginated response { data: [...], meta: {...} }
+    // ✅ and legacy response { data: [...] } gracefully
+    const meta = response.data.meta || null;
+    return {
+      users: response.data.data,
+      meta
+    };
   },
   // Update user status
   updateUserStatus: async (userId: string, status: 'active' | 'disabled'): Promise<User> => {
@@ -43,15 +54,26 @@ export const adminApi = {
     });
     return response.data.data;
   },
-  // Get all properties
+  // Get all properties (with pagination metadata support)
   getAllProperties: async (filters?: {
     status?: string;
     search?: string;
-  }): Promise<Room[]> => {
+    page?: number;
+    limit?: number;
+    sort?: string;
+    cursor?: string;
+  }, signal?: AbortSignal): Promise<{ properties: Room[]; meta: PaginationMeta | null }> => {
     const response = await axiosInstance.get<ApiResponse<Room[]>>('/admin/properties', {
-      params: filters
+      params: filters,
+      signal
     });
-    return response.data.data;
+    // ✅ Handle both paginated response { data: [...], meta: {...} }
+    // ✅ and legacy response { data: [...] } gracefully
+    const meta = response.data.meta || null;
+    return {
+      properties: response.data.data,
+      meta
+    };
   },
   // Approve property
   approveProperty: async (propertyId: string): Promise<Room> => {

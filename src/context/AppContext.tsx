@@ -140,7 +140,7 @@ const initialBookings: Booking[] = [
     tenantEmail: 'sneha@example.com',
     tenantPhone: '+91 98765 11111',
     moveInDate: '2024-02-01',
-    message: 'Looking for immediate move-in. Can we schedule a visit?',
+    message: 'Looking for immediate Visit-in. Can we schedule a visit?',
     status: 'pending',
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },

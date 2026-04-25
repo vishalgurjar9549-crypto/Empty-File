@@ -1,11 +1,18 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { ownerApi } from '../../api/owner.api';
-import { OwnerSummary, Room, Booking, PropertyNote } from '../../types/api.types';
+import { OwnerSummary, Room, Booking, PropertyNote, OwnerActivityItem } from '../../types/api.types';
 import { updateBookingStatus } from './bookings.slice';
+
+const ACTIVITY_STALE_MS = 2 * 60 * 1000;
+
 interface OwnerState {
   summary: OwnerSummary | null;
   myRooms: Room[];
   myBookings: Booking[];
+  // Recent activity
+  activity: OwnerActivityItem[];
+  activityLoading: boolean;
+  activityLastFetched: number | null;
   // Property notes (keyed by propertyId)
   propertyNotes: Record<string, PropertyNote[]>;
   notesLoading: Record<string, boolean>;
@@ -19,6 +26,9 @@ const initialState: OwnerState = {
   summary: null,
   myRooms: [],
   myBookings: [],
+  activity: [],
+  activityLoading: false,
+  activityLastFetched: null,
   propertyNotes: {},
   notesLoading: {},
   notesError: {},
@@ -80,6 +90,38 @@ export const fetchPropertyNotes = createAsyncThunk('owner/fetchPropertyNotes', a
       message
     });
   }
+}, {
+  condition: (propertyId, { getState }) => {
+    const { owner } = getState() as { owner: OwnerState };
+
+    if (owner.notesLoading[propertyId]) return false;
+    if (Object.prototype.hasOwnProperty.call(owner.propertyNotes, propertyId)) return false;
+
+    return true;
+  }
+});
+
+// Fetch recent activity
+export const fetchOwnerActivity = createAsyncThunk('owner/fetchActivity', async (_, {
+  rejectWithValue
+}) => {
+  try {
+    const activity = await ownerApi.getRecentActivity();
+    return activity;
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to fetch activity';
+    console.warn('[owner] fetchOwnerActivity failed', message, error);
+    return rejectWithValue(message);
+  }
+}, {
+  condition: (_, { getState }) => {
+    const { owner } = getState() as { owner: OwnerState };
+
+    if (owner.activityLoading) return false;
+    if (!owner.activityLastFetched) return true;
+
+    return Date.now() - owner.activityLastFetched > ACTIVITY_STALE_MS;
+  }
 });
 const ownerSlice = createSlice({
   name: 'owner',
@@ -92,6 +134,9 @@ const ownerSlice = createSlice({
       state.summary = null;
       state.myRooms = [];
       state.myBookings = [];
+      state.activity = [];
+      state.activityLoading = false;
+      state.activityLastFetched = null;
       state.propertyNotes = {};
       state.notesLoading = {};
       state.notesError = {};
@@ -157,6 +202,17 @@ const ownerSlice = createSlice({
       };
       state.notesLoading[propertyId] = false;
       state.notesError[propertyId] = message;
+    });
+
+    // Fetch activity
+    builder.addCase(fetchOwnerActivity.pending, (state) => {
+      state.activityLoading = true;
+    }).addCase(fetchOwnerActivity.fulfilled, (state, action) => {
+      state.activityLoading = false;
+      state.activity = action.payload;
+      state.activityLastFetched = Date.now();
+    }).addCase(fetchOwnerActivity.rejected, (state) => {
+      state.activityLoading = false;
     });
 
     // OPTIMISTIC UPDATES for Booking Status

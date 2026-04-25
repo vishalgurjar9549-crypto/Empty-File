@@ -99,7 +99,7 @@ export class BookingService {
   }
 
   /**
-   * NORMALIZE MOVE-IN DATE — Timezone Safe
+   * NORMALIZE Visit-in DATE — Timezone Safe
    *
    * Never trust frontend dates. This method:
    * 1. Parses the date string
@@ -116,7 +116,7 @@ export class BookingService {
     const today = new Date();
     const todayNormalized = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
     if (normalized < todayNormalized) {
-      throw new InvalidDateError('Move-in date must be today or in the future');
+      throw new InvalidDateError('Visit-in date must be today or in the future');
     }
     return normalized;
   }

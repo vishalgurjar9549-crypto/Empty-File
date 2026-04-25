@@ -193,7 +193,8 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative z-0 isolate">
+        
         <div
           ref={mapContainer}
           className="w-full h-64 md:h-80 rounded-lg border border-slate-300 dark:border-slate-600 overflow-hidden bg-slate-100 dark:bg-slate-700"

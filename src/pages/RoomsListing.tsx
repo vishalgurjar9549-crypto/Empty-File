@@ -1,6 +1,515 @@
-import { useEffect, useState, useMemo, useRef, memo, useCallback } from "react";
+// import {
+//   useEffect,
+//   useState,
+//   useMemo,
+//   useRef,
+//   memo,
+//   useCallback,
+// } from "react";
+// import { useSearchParams } from "react-router-dom";
+// import {  Search, X, SlidersHorizontal } from "lucide-react";
+
+// import { RoomCard } from "../components/RoomCard";
+// import { FilterSidebar } from "../components/FilterSidebar";
+// import { VirtualizedGrid } from "../components/VirtualizedGrid";
+// import { useAppDispatch, useAppSelector } from "../store/hooks";
+// import { fetchRooms } from "../store/slices/rooms.slice";
+
+// /* ─────────────────────────────────────────────
+//    FILTER CHIPS
+// ───────────────────────────────────────────── */
+// const Chip = memo(function Chip({
+//   label,
+//   onRemove,
+// }: {
+//   label: string;
+//   onRemove: () => void;
+// }) {
+//   return (
+//     <button
+//       type="button"
+//       onClick={onRemove}
+//       className="group inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200"
+//       style={{
+//         background: "rgba(212,175,55,0.1)",
+//         border: "1px solid rgba(212,175,55,0.35)",
+//         color: "rgba(212,175,55,0.95)",
+//       }}
+//     >
+//       <span className="truncate tracking-wide uppercase">{label}</span>
+//       <span
+//         className="flex h-4 w-4 items-center justify-center rounded-full transition-colors group-hover:bg-white/10"
+//       >
+//         <X className="h-3 w-3" />
+//       </span>
+//     </button>
+//   );
+// });
+
+// const FilterChips = memo(function FilterChips({
+//   appliedFilters,
+//   onRemoveFilter,
+// }: any) {
+//   const hasFilters =
+//     appliedFilters.city ||
+//     appliedFilters.minPrice ||
+//     appliedFilters.maxPrice ||
+//     appliedFilters.roomType ||
+//     appliedFilters.roomTypes?.length > 0 ||
+//     (appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY") ||
+//     appliedFilters.idealFor?.length > 0;
+
+//   if (!hasFilters) return null;
+
+//   return (
+//     <div className="flex flex-wrap items-center gap-2">
+//       <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mr-1">
+//         Active:
+//       </span>
+
+//       {appliedFilters.city && (
+//         <Chip label={`📍 ${appliedFilters.city}`} onRemove={() => onRemoveFilter("city")} />
+//       )}
+//       {(appliedFilters.minPrice || appliedFilters.maxPrice) && (
+//         <Chip
+//           label={`₹${appliedFilters.minPrice || 0}–₹${appliedFilters.maxPrice || "∞"}`}
+//           onRemove={() => onRemoveFilter("price")}
+//         />
+//       )}
+//       {appliedFilters.roomType && (
+//         <Chip label={appliedFilters.roomType.toUpperCase()} onRemove={() => onRemoveFilter("roomType")} />
+//       )}
+//       {appliedFilters.roomTypes?.length > 0 && (
+//         <Chip label={appliedFilters.roomTypes.join(", ")} onRemove={() => onRemoveFilter("roomTypes")} />
+//       )}
+//       {appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY" && (
+//         <Chip
+//           label={
+//             appliedFilters.genderPreference === "MALE_ONLY"
+//               ? "Boys Only"
+//               : appliedFilters.genderPreference === "FEMALE_ONLY"
+//               ? "Girls Only"
+//               : "Anyone"
+//           }
+//           onRemove={() => onRemoveFilter("genderPreference")}
+//         />
+//       )}
+//       {appliedFilters.idealFor?.length > 0 && (
+//         <Chip
+//           label={`For: ${appliedFilters.idealFor.join(", ")}`}
+//           onRemove={() => onRemoveFilter("idealFor")}
+//         />
+//       )}
+//     </div>
+//   );
+// });
+
+// /* ─────────────────────────────────────────────
+//    SKELETON CARD
+// ───────────────────────────────────────────── */
+// function SkeletonCard() {
+//   return (
+//     <div className="rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-900/60 animate-pulse">
+//       <div className="h-48 bg-slate-200 dark:bg-slate-800" />
+//       <div className="p-4 space-y-3">
+//         <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-800" />
+//         <div className="h-3 w-1/2 rounded bg-slate-200 dark:bg-slate-800" />
+//         <div className="h-3 w-1/3 rounded bg-slate-200 dark:bg-slate-800" />
+//       </div>
+//     </div>
+//   );
+// }
+
+// /* ─────────────────────────────────────────────
+//    SORT SELECT
+// ───────────────────────────────────────────── */
+// const sortOptions = [
+//   { value: "latest", label: "Latest" },
+//   { value: "most_viewed", label: "Most Viewed" },
+//   { value: "most_contacted", label: "Most Contacted" },
+//   { value: "price_low", label: "Price: Low → High" },
+//   { value: "price_high", label: "Price: High → Low" },
+// ];
+
+// /* ─────────────────────────────────────────────
+//    MAIN
+// ───────────────────────────────────────────── */
+// export function RoomsListing() {
+//   const dispatch = useAppDispatch();
+//   const { rooms, loading, meta } = useAppSelector((s) => s.rooms);
+
+//   const [searchParams, setSearchParams] = useSearchParams();
+//   const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+//   /* ── Infinite scroll state ── */
+//   const [allRooms, setAllRooms] = useState<typeof rooms>([]);
+//   const [hasMore, setHasMore] = useState(true);
+//   const [loadingMore, setLoadingMore] = useState(false);
+//   const sentinelRef = useRef<HTMLDivElement>(null);
+//   const observerRef = useRef<IntersectionObserver | null>(null);
+
+//   /* ── REQUIREMENT 1-3: Single source of truth for responsive columns ── */
+//   /* Track window width for responsive behavior */
+//   const [windowWidth, setWindowWidth] = useState(
+//     typeof window !== "undefined" ? window.innerWidth : 1024
+//   );
+
+//   useEffect(() => {
+//     let resizeTimer: NodeJS.Timeout;
+//     const handleResize = () => {
+//       clearTimeout(resizeTimer);
+//       resizeTimer = setTimeout(() => {
+//         setWindowWidth(window.innerWidth);
+//       }, 150);
+//     };
+//     window.addEventListener("resize", handleResize);
+//     return () => {
+//       clearTimeout(resizeTimer);
+//       window.removeEventListener("resize", handleResize);
+//     };
+//   }, []);
+
+//   /* Calculate responsive columns centrally (single source of truth) */
+//   const columns = useMemo(() => {
+//     if (windowWidth < 640) return 1;      // Mobile: 1 column
+//     if (windowWidth < 1024) return 2;     // Tablet: 2 columns
+//     if (windowWidth < 1280) return 3;     // Small desktop (lg): 3 columns
+//     return 4;                              // Large desktop (1280px+): 4 columns
+//   }, [windowWidth]);
+
+//   /* Calculate responsive estimateSize to match actual card heights */
+//   const estimateSize = useMemo(() => {
+//     // Measure: img(192px) + content(~140px) + gap(24px) = ~356px base
+//     // Add padding for safety
+//     if (columns === 1) return 370;
+//     if (columns === 2) return 390;
+//     if (columns === 3) return 410;
+//     return 420;  // 4 columns - slightly compressed but still readable
+//   }, [columns]);
+
+//   /* ── Helpers ── */
+//   const getFiltersFromURL = useCallback(() => {
+//     const roomTypesParam = searchParams.get("roomTypes") || "";
+//     const idealForParam = searchParams.get("idealFor") || "";
+//     return {
+//       city: searchParams.get("city") || "",
+//       minPrice: searchParams.get("minPrice") || "",
+//       maxPrice: searchParams.get("maxPrice") || "",
+//       roomType: searchParams.get("roomType") || "",
+//       roomTypes: roomTypesParam ? roomTypesParam.split(",").filter(Boolean) : [],
+//       genderPreference: searchParams.get("genderPreference") || "",
+//       idealFor: idealForParam ? idealForParam.split(",").filter(Boolean) : [],
+//     };
+//   }, [searchParams]);
+
+//   const [filters, setFilters] = useState(() => getFiltersFromURL());
+//   const [appliedFilters, setAppliedFilters] = useState(() => getFiltersFromURL());
+//   const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "latest");
+//   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+//   const [page, setPage] = useState(() => Number(searchParams.get("page") || "1"));
+
+//   /* ── API filters memo ── */
+//   const apiFilters = useMemo(
+//     () => ({
+//       city: appliedFilters.city || undefined,
+//       minPrice: appliedFilters.minPrice || undefined,
+//       maxPrice: appliedFilters.maxPrice || undefined,
+//       roomType: appliedFilters.roomType || undefined,
+//       roomTypes: appliedFilters.roomTypes?.length ? appliedFilters.roomTypes : undefined,
+//       genderPreference:
+//         appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY"
+//           ? appliedFilters.genderPreference
+//           : undefined,
+//       idealFor: appliedFilters.idealFor?.length ? appliedFilters.idealFor : undefined,
+//       sort: sortBy,
+//       cursor: nextCursor,
+//       limit: 20,
+//     }),
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//     [JSON.stringify(appliedFilters), sortBy, nextCursor]
+//   );
+
+//   const filterKey = useMemo(
+//     () =>
+//       JSON.stringify({
+//         ...appliedFilters,
+//         sort: sortBy,
+//       }),
+//     [appliedFilters, sortBy]
+//   );
+
+//   /* ── Handlers ── */
+//   const handleApplyFilters = useCallback((newFilters: any) => {
+//     setFilters(newFilters);
+//     setAppliedFilters(newFilters);
+//     setAllRooms([]);
+//     setNextCursor(undefined);
+//     setHasMore(true);
+//     setPage(1);
+//   }, []);
+
+//   const handleRemoveFilter = useCallback((key: string) => {
+//     const patch = (prev: any) => {
+//       const u = { ...prev };
+//       if (key === "price") { u.minPrice = ""; u.maxPrice = ""; }
+//       else if (key === "roomTypes") u.roomTypes = [];
+//       else if (key === "idealFor") u.idealFor = [];
+//       else u[key] = "";
+//       return u;
+//     };
+//     setAppliedFilters(patch);
+//     setFilters(patch);
+//     setPage(1);
+//   }, []);
+
+//   const handleSortChange = useCallback((value: string) => {
+//     setSortBy(value);
+//     setPage(1);
+//   }, []);
+
+//   /* ── Sync URL ── */
+//   useEffect(() => {
+//     const p = new URLSearchParams();
+//     if (appliedFilters.city) p.set("city", appliedFilters.city);
+//     if (appliedFilters.minPrice) p.set("minPrice", appliedFilters.minPrice);
+//     if (appliedFilters.maxPrice) p.set("maxPrice", appliedFilters.maxPrice);
+//     if (appliedFilters.roomType) p.set("roomType", appliedFilters.roomType);
+//     if (appliedFilters.roomTypes?.length) p.set("roomTypes", appliedFilters.roomTypes.join(","));
+//     if (appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY")
+//       p.set("genderPreference", appliedFilters.genderPreference);
+//     if (appliedFilters.idealFor?.length) p.set("idealFor", appliedFilters.idealFor.join(","));
+//     if (sortBy !== "latest") p.set("sort", sortBy);
+//     if (page > 1) p.set("page", String(page));
+//     setSearchParams(p);
+//   }, [appliedFilters, sortBy, page, setSearchParams]);
+
+//   /* ── Fetch next page ── */
+//   const fetchNextPage = useCallback(async () => {
+//     if (loadingMore || !hasMore || loading.fetch) return;
+//     setLoadingMore(true);
+//     try {
+//       const result = await dispatch(fetchRooms({ ...apiFilters, cursor: nextCursor })).unwrap();
+//       if (!result?.rooms?.length) { setHasMore(false); return; }
+//       if (result.meta?.nextCursor) setNextCursor(result.meta.nextCursor);
+//       setAllRooms((prev) => {
+//         const ids = new Set(prev.map((r) => r.id));
+//         const fresh = result.rooms.filter((r: any) => !ids.has(r.id));
+//         return fresh.length ? [...prev, ...fresh] : prev;
+//       });
+//       if (!result.meta?.hasNextPage || result.rooms.length < 20) setHasMore(false);
+//     } catch (e) {
+//       console.error("[RoomsListing] fetchNextPage error", e);
+//     } finally {
+//       setLoadingMore(false);
+//     }
+//   }, [nextCursor, loadingMore, hasMore, apiFilters, dispatch, loading.fetch]);
+
+//   /* ── Initial fetch on filter change ── */
+//   const isFetchingRef = useRef(false);
+//   const lastKeyRef = useRef<string | null>(null);
+
+//   useEffect(() => {
+//     if (isFetchingRef.current || lastKeyRef.current === filterKey) return;
+//     setAllRooms([]);
+//     setHasMore(true);
+//     setLoadingMore(false);
+//     setNextCursor(undefined);
+//     lastKeyRef.current = filterKey;
+//     isFetchingRef.current = true;
+//     dispatch(fetchRooms(apiFilters)).finally(() => { isFetchingRef.current = false; });
+//   }, [filterKey, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+//   /* ── Sync Redux rooms → allRooms (first load) ── */
+//   useEffect(() => {
+//     if (rooms.length > 0) {
+//       setAllRooms((prev) => (prev.length === 0 ? rooms : prev));
+//       if ((meta?.total && rooms.length >= meta.total) || rooms.length < 20)
+//         setHasMore(false);
+//     }
+//   }, [rooms, loading.fetch, meta]);
+
+//   /* ── Intersection observer ── */
+//   useEffect(() => {
+//     if (!sentinelRef.current) return;
+//     observerRef.current = new IntersectionObserver(
+//       ([entry]) => {
+//         if (entry.isIntersecting && hasMore && !loadingMore && !loading.fetch && !isFetchingRef.current)
+//           fetchNextPage();
+//       },
+//       { root: null, rootMargin: "200px", threshold: 0.1 }
+//     );
+//     observerRef.current.observe(sentinelRef.current);
+//     return () => observerRef.current?.disconnect();
+//   }, [hasMore, loadingMore, loading.fetch, fetchNextPage]);
+
+//   /* ── Derived ── */
+//   const isInitialLoading = loading.fetch && allRooms.length === 0;
+//   const isEmpty = !isInitialLoading && allRooms.length === 0;
+
+//   /* ─────────────────────────────────────────────
+//      RENDER
+//   ───────────────────────────────────────────── */
+//   return (
+//     <div className="h-screen bg-[#f8f6f1] dark:bg-[#0d0b06] flex flex-col overflow-hidden">
+//       {/* Header section - FULL WIDTH with constrained content */}
+//       <div className="w-full px-6 lg:px-8 py-6 flex-shrink-0 border-b border-slate-200/50 dark:border-slate-800/50">
+//         {/* Inner wrapper - align with grid below */}
+//         <div className="mx-auto w-full max-w-[1400px]">
+//           {/* ── PAGE HEADER ── */}
+//           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+//             <div>
+//               <h1
+//                 className="text-3xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-white"
+//                 style={{ fontFamily: "'Playfair Display', serif" }}
+//               >
+//                 Find Your Stay
+//               </h1>
+//               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+//                 {meta?.total
+//                   ? `${meta.total.toLocaleString()} properties available`
+//                   : "Browse all properties"}
+//               </p>
+//             </div>
+
+//             <div className="flex items-center gap-3 flex-wrap">
+//               {/* Mobile filter button */}
+//               <button
+//                 onClick={() => setIsFilterOpen(true)}
+//                 className="lg:hidden inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all hover:scale-[1.02]"
+//                 style={{
+//                   background: "rgba(212,175,55,0.1)",
+//                   border: "1px solid rgba(212,175,55,0.3)",
+//                   color: "rgba(212,175,55,0.9)",
+//                 }}
+//               >
+//                 <SlidersHorizontal className="h-4 w-4" />
+//                 Filters
+//               </button>
+
+//               {/* Sort */}
+//               <select
+//                 value={sortBy}
+//                 onChange={(e) => handleSortChange(e.target.value)}
+//                 className="rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:shadow-md outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-300/30 cursor-pointer"
+//               >
+//                 {sortOptions.map((o) => (
+//                   <option key={o.value} value={o.value}>
+//                     {o.label}
+//                   </option>
+//                 ))}
+//               </select>
+//             </div>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* Main content: sidebar + grid (flex-1 fills remaining height) */}
+//       <div className="flex-1 flex overflow-hidden">
+        
+//         {/* Desktop sidebar - fixed width, scrolls internally */}
+//         <div className="hidden lg:flex h-full w-72 flex-col flex-shrink-0 border-r border-slate-200/70 dark:border-slate-800/60 bg-white dark:bg-[#0d0b06]">
+//           <div className="h-full overflow-y-auto px-4">
+//             <FilterSidebar
+//               filters={filters}
+//               setFilters={setFilters}
+//               onApplyFilters={handleApplyFilters}
+//               isOpen={isFilterOpen}
+//               onClose={() => setIsFilterOpen(false)}
+//             />
+//           </div>
+//         </div>
+
+//         {/* Grid container - FULL WIDTH, proper scroll hierarchy */}
+//         <div className="flex-1 overflow-hidden w-full flex flex-col">
+//           {/* Content wrapper - handles scroll */}
+//           <div className="h-full overflow-y-auto">
+//             {/* Max-width container - center content and prevent over-stretching */}
+//             <div className="mx-auto w-full max-w-[1400px] px-6 lg:px-8 py-6">
+//               {/* FILTER CHIPS */}
+//               {appliedFilters && (
+//                 <div className="mb-6">
+//                   <FilterChips appliedFilters={appliedFilters} onRemoveFilter={handleRemoveFilter} />
+//                 </div>
+//               )}
+
+//               {isInitialLoading ? (
+//                 <div className="grid gap-3 sm:gap-5 md:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+//                   {Array.from({ length: 6 }).map((_, i) => (
+//                     <SkeletonCard key={i} />
+//                   ))}
+//                 </div>
+//               ) : isEmpty ? (
+//                 <div className="flex flex-col items-center justify-center py-32 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/30">
+//                   <Search
+//                     className="mb-4 h-12 w-12 opacity-20"
+//                     style={{ color: "rgba(212,175,55,0.6)" }}
+//                   />
+//                   <p className="text-lg font-semibold text-slate-500 dark:text-slate-400">
+//                     No properties found
+//                   </p>
+//                   <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+//                     Try adjusting your filters
+//                   </p>
+//                 </div>
+//               ) : (
+//                 <>
+//                   {/* ✅ VirtualizedGrid - Container-based virtualization */}
+//                   {/* - Responsive columns: 1/2/3/4 based on screen width */}
+//                   {/* - Internal ScrollContainer handles actual scrolling */}
+//                   <VirtualizedGrid
+//                     items={allRooms}
+//                     renderItem={(room) => <RoomCard room={room} />}
+//                     columns={columns}
+//                     estimateSize={estimateSize}
+//                     overscan={4}
+//                     key={`grid-${columns}-${allRooms.length}`}
+//                     containerHeight="100%"
+//                   />
+
+//                   {/* Sentinel for infinite scroll */}
+//                   <div ref={sentinelRef} className="mt-4 py-8 flex justify-center">
+//                     {loadingMore && (
+//                       <div className="inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 text-sm font-medium"
+//                         style={{
+//                           background: "rgba(212,175,55,0.08)",
+//                           border: "1px solid rgba(212,175,55,0.2)",
+//                           color: "rgba(212,175,55,0.85)",
+//                         }}
+//                       >
+//                         <span
+//                           className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin"
+//                         />
+//                         Loading more…
+//                       </div>
+//                     )}
+//                     {!hasMore && allRooms.length > 0 && (
+//                       <p className="text-sm text-slate-400 dark:text-slate-500 tracking-wide">
+//                         — All {allRooms.length} properties loaded —
+//                       </p>
+//                     )}
+//                   </div>
+//                 </>
+//                 )}
+//             </div>
+//           </div>
+//         </div>
+
+//       </div>
+//     </div>
+//   );
+// }
+
+
+import {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  memo,
+  useCallback,
+} from "react";
 import { useSearchParams } from "react-router-dom";
-import { Filter, Search, X } from "lucide-react";
+import { Search, X, SlidersHorizontal } from "lucide-react";
 
 import { RoomCard } from "../components/RoomCard";
 import { FilterSidebar } from "../components/FilterSidebar";
@@ -8,92 +517,9 @@ import { VirtualizedGrid } from "../components/VirtualizedGrid";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { fetchRooms } from "../store/slices/rooms.slice";
 
-/* =========================================================
+/* ─────────────────────────────────────────────
    FILTER CHIPS
-========================================================= */
-/**
- * ✅ Memoized FilterChips component
- * Prevents re-renders when the chips list doesn't change
- */
-const FilterChips = memo(function FilterChips({
-  appliedFilters,
-  onRemoveFilter,
-}: any) {
-  const hasFilters =
-    appliedFilters.city ||
-    appliedFilters.minPrice ||
-    appliedFilters.maxPrice ||
-    appliedFilters.roomType ||
-    (appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0) ||
-    (appliedFilters.genderPreference &&
-      appliedFilters.genderPreference !== "ANY") ||
-    (appliedFilters.idealFor && appliedFilters.idealFor.length > 0);
-
-  if (!hasFilters) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {appliedFilters.city && (
-        <Chip
-          label={`City: ${appliedFilters.city}`}
-          onRemove={() => onRemoveFilter("city")}
-        />
-      )}
-
-      {(appliedFilters.minPrice || appliedFilters.maxPrice) && (
-        <Chip
-          label={`₹${appliedFilters.minPrice || 0} - ₹${
-            appliedFilters.maxPrice || "Any"
-          }`}
-          onRemove={() => onRemoveFilter("price")}
-        />
-      )}
-
-      {appliedFilters.roomType && (
-        <Chip
-          label={`Type: ${appliedFilters.roomType.toUpperCase()}`}
-          onRemove={() => onRemoveFilter("roomType")}
-        />
-      )}
-
-      {/* ✅ NEW: Display multi-select room types */}
-      {appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0 && (
-        <Chip
-          label={`Types: ${appliedFilters.roomTypes.join(", ")}`}
-          onRemove={() => onRemoveFilter("roomTypes")}
-        />
-      )}
-
-      {/* ✅ NEW: Display gender preference */}
-      {appliedFilters.genderPreference &&
-        appliedFilters.genderPreference !== "ANY" && (
-          <Chip
-            label={`Gender: ${
-              appliedFilters.genderPreference === "MALE_ONLY"
-                ? "Boys"
-                : appliedFilters.genderPreference === "FEMALE_ONLY"
-                ? "Girls"
-                : "Anyone"
-            }`}
-            onRemove={() => onRemoveFilter("genderPreference")}
-          />
-        )}
-
-      {/* ✅ NEW: Display ideal for */}
-      {appliedFilters.idealFor && appliedFilters.idealFor.length > 0 && (
-        <Chip
-          label={`Ideal For: ${appliedFilters.idealFor.join(", ")}`}
-          onRemove={() => onRemoveFilter("idealFor")}
-        />
-      )}
-    </div>
-  );
-});
-
-/**
- * ✅ Memoized Chip component
- * Prevents re-renders when sibling chips update
- */
+───────────────────────────────────────────── */
 const Chip = memo(function Chip({
   label,
   onRemove,
@@ -105,39 +531,165 @@ const Chip = memo(function Chip({
     <button
       type="button"
       onClick={onRemove}
-      className="group inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 dark:bg-gold/15 dark:border-gold/25 px-3.5 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 shadow-sm transition-all duration-200 hover:border-gold hover:bg-gold/15 dark:hover:bg-gold/20 hover:shadow-md"
+      className="group inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200"
+      style={{
+        background: "rgba(212,175,55,0.1)",
+        border: "1px solid rgba(212,175,55,0.35)",
+        color: "rgba(212,175,55,0.95)",
+      }}
     >
-      <span className="truncate">{label}</span>
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 dark:bg-slate-800/80 transition-colors group-hover:bg-white dark:group-hover:bg-slate-700">
-        <X className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+      <span className="truncate tracking-wide uppercase">{label}</span>
+      <span className="flex h-4 w-4 items-center justify-center rounded-full transition-colors group-hover:bg-white/10">
+        <X className="h-3 w-3" />
       </span>
     </button>
   );
 });
 
-/* =========================================================
-   MAIN COMPONENT
-========================================================= */
+const FilterChips = memo(function FilterChips({
+  appliedFilters,
+  onRemoveFilter,
+}: any) {
+  const hasFilters =
+    appliedFilters.city ||
+    appliedFilters.minPrice ||
+    appliedFilters.maxPrice ||
+    appliedFilters.roomType ||
+    appliedFilters.roomTypes?.length > 0 ||
+    (appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY") ||
+    appliedFilters.idealFor?.length > 0;
+
+  if (!hasFilters) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mr-1">
+        Active:
+      </span>
+      {appliedFilters.city && (
+        <Chip label={`📍 ${appliedFilters.city}`} onRemove={() => onRemoveFilter("city")} />
+      )}
+      {(appliedFilters.minPrice || appliedFilters.maxPrice) && (
+        <Chip
+          label={`₹${appliedFilters.minPrice || 0}–₹${appliedFilters.maxPrice || "∞"}`}
+          onRemove={() => onRemoveFilter("price")}
+        />
+      )}
+      {appliedFilters.roomType && (
+        <Chip label={appliedFilters.roomType.toUpperCase()} onRemove={() => onRemoveFilter("roomType")} />
+      )}
+      {appliedFilters.roomTypes?.length > 0 && (
+        <Chip label={appliedFilters.roomTypes.join(", ")} onRemove={() => onRemoveFilter("roomTypes")} />
+      )}
+      {appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY" && (
+        <Chip
+          label={
+            appliedFilters.genderPreference === "MALE_ONLY"
+              ? "Boys Only"
+              : appliedFilters.genderPreference === "FEMALE_ONLY"
+              ? "Girls Only"
+              : "Anyone"
+          }
+          onRemove={() => onRemoveFilter("genderPreference")}
+        />
+      )}
+      {appliedFilters.idealFor?.length > 0 && (
+        <Chip
+          label={`For: ${appliedFilters.idealFor.join(", ")}`}
+          onRemove={() => onRemoveFilter("idealFor")}
+        />
+      )}
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────────
+   SKELETON CARD
+───────────────────────────────────────────── */
+function SkeletonCard() {
+  return (
+    <div className="rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-900/60 animate-pulse">
+      <div className="h-48 bg-slate-200 dark:bg-slate-800" />
+      <div className="p-4 space-y-3">
+        <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-800" />
+        <div className="h-3 w-1/2 rounded bg-slate-200 dark:bg-slate-800" />
+        <div className="h-3 w-1/3 rounded bg-slate-200 dark:bg-slate-800" />
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   SORT OPTIONS
+───────────────────────────────────────────── */
+const sortOptions = [
+  { value: "latest", label: "Latest" },
+  { value: "most_viewed", label: "Most Viewed" },
+  { value: "most_contacted", label: "Most Contacted" },
+  { value: "price_low", label: "Price: Low → High" },
+  { value: "price_high", label: "Price: High → Low" },
+];
+
+/* ─────────────────────────────────────────────
+   MAIN
+───────────────────────────────────────────── */
 export function RoomsListing() {
   const dispatch = useAppDispatch();
-  const { rooms, loading, meta } = useAppSelector((state) => state.rooms);
+  const { rooms, loading, meta } = useAppSelector((s) => s.rooms);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  /* =============================
-     INFINITE SCROLL STATE
-  ============================== */
+  /* ── Infinite scroll state ── */
   const [allRooms, setAllRooms] = useState<typeof rooms>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  /* =============================
-     GET FILTERS FROM URL
-  ============================== */
-  const getFiltersFromURL = () => {
+  /* ─────────────────────────────────────────────
+    ✅ FIX: Single scroll owner ref
+    Attached to the ONE div that has overflow-y-auto.
+    Passed into VirtualizedGrid so the virtualizer
+    shares the same scroll element — no double scrollbar.
+  ───────────────────────────────────────────── */
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+
+  /* ── Responsive columns ── */
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1024
+  );
+
+  useEffect(() => {
+    let resizeTimer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => setWindowWidth(window.innerWidth), 150);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  const columns = useMemo(() => {
+    if (windowWidth < 640) return 1;
+    if (windowWidth < 1024) return 2;
+    if (windowWidth < 1280) return 3;
+    return 4;
+  }, [windowWidth]);
+
+  // estimateSize is just a hint — measureElement corrects it after mount
+  const estimateSize = useMemo(() => {
+    if (columns === 1) return 370;
+    if (columns === 2) return 390;
+    if (columns === 3) return 410;
+    return 420;
+  }, [columns]);
+
+  /* ── Helpers ── */
+  const getFiltersFromURL = useCallback(() => {
     const roomTypesParam = searchParams.get("roomTypes") || "";
     const idealForParam = searchParams.get("idealFor") || "";
     return {
@@ -145,499 +697,323 @@ export function RoomsListing() {
       minPrice: searchParams.get("minPrice") || "",
       maxPrice: searchParams.get("maxPrice") || "",
       roomType: searchParams.get("roomType") || "",
-      // ✅ NEW: Parse roomTypes from URL (comma-separated string → array)
-      roomTypes: roomTypesParam
-        ? roomTypesParam.split(",").filter((rt) => rt.trim())
-        : [],
-      // ✅ NEW: Parse genderPreference from URL
+      roomTypes: roomTypesParam ? roomTypesParam.split(",").filter(Boolean) : [],
       genderPreference: searchParams.get("genderPreference") || "",
-      // ✅ NEW: Parse idealFor from URL (comma-separated string → array)
-      idealFor: idealForParam
-        ? idealForParam.split(",").filter((inf) => inf.trim())
-        : [],
+      idealFor: idealForParam ? idealForParam.split(",").filter(Boolean) : [],
     };
-  };
+  }, [searchParams]);
 
   const [filters, setFilters] = useState(() => getFiltersFromURL());
-  const [appliedFilters, setAppliedFilters] = useState(() =>
-    getFiltersFromURL(),
-  );
-  const [sortBy, setSortBy] = useState(
-    () => searchParams.get("sort") || "latest",
-  );
-
-  // ✅ CURSOR PAGINATION: Use cursor instead of page
+  const [appliedFilters, setAppliedFilters] = useState(() => getFiltersFromURL());
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "latest");
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
-  const [page, setPage] = useState(() =>
-    Number(searchParams.get("page") || "1"),
-  ); // For display only
+  const [page, setPage] = useState(() => Number(searchParams.get("page") || "1"));
 
-  /* =============================
-     API FILTERS MEMO - WITH CURSOR PAGINATION
-  ============================== */
-  const apiFilters = useMemo(() => {
-    return {
+  const apiFilters = useMemo(
+    () => ({
       city: appliedFilters.city || undefined,
       minPrice: appliedFilters.minPrice || undefined,
       maxPrice: appliedFilters.maxPrice || undefined,
       roomType: appliedFilters.roomType || undefined,
-      roomTypes: appliedFilters.roomTypes?.length
-        ? appliedFilters.roomTypes
-        : undefined,
+      roomTypes: appliedFilters.roomTypes?.length ? appliedFilters.roomTypes : undefined,
       genderPreference:
-        appliedFilters.genderPreference &&
-        appliedFilters.genderPreference !== "ANY"
+        appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY"
           ? appliedFilters.genderPreference
           : undefined,
-      idealFor: appliedFilters.idealFor?.length
-        ? appliedFilters.idealFor
-        : undefined,
+      idealFor: appliedFilters.idealFor?.length ? appliedFilters.idealFor : undefined,
       sort: sortBy,
       cursor: nextCursor,
       limit: 20,
-    };
-  }, [
-    JSON.stringify(appliedFilters), // ✅ KEY FIX
-    sortBy,
-    nextCursor,
-  ]);
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(appliedFilters), sortBy, nextCursor]
+  );
 
-  /* =============================
-     FILTER KEY - STABLE DEPENDENCY FOR useEffect
-     ✅ FIX: Create string key instead of object reference
-  ============================== */
-  const filterKey = useMemo(() => {
-    return JSON.stringify({
-      city: appliedFilters.city || "",
-      minPrice: appliedFilters.minPrice || "",
-      maxPrice: appliedFilters.maxPrice || "",
-      roomType: appliedFilters.roomType || "",
-      roomTypes: appliedFilters.roomTypes || [],
-      genderPreference: appliedFilters.genderPreference || "",
-      idealFor: appliedFilters.idealFor || [],
-      sort: sortBy,
-    });
-  }, [appliedFilters, sortBy]);
+  const filterKey = useMemo(
+    () => JSON.stringify({ ...appliedFilters, sort: sortBy }),
+    [appliedFilters, sortBy]
+  );
 
-  /* =============================
-     APPLY FILTERS - useCallback for optimization
-  ============================== */
+  /* ── Handlers ── */
   const handleApplyFilters = useCallback((newFilters: any) => {
     setFilters(newFilters);
     setAppliedFilters(newFilters);
-    setAllRooms([]); // Clear existing rooms
-    setNextCursor(undefined); // ✅ CURSOR PAGINATION: Reset cursor when filters change
+    setAllRooms([]);
+    setNextCursor(undefined);
     setHasMore(true);
     setPage(1);
   }, []);
 
-  /* =============================
-     REMOVE FILTER CHIP - useCallback for optimization
-     ✅ FIX: No dependencies - uses functional setState
-  ============================== */
-  const handleRemoveFilter = useCallback(
-    (key: string) => {
-      setAppliedFilters((prev) => {
-        const updated = { ...prev };
+  const handleRemoveFilter = useCallback((key: string) => {
+    const patch = (prev: any) => {
+      const u = { ...prev };
+      if (key === "price") { u.minPrice = ""; u.maxPrice = ""; }
+      else if (key === "roomTypes") u.roomTypes = [];
+      else if (key === "idealFor") u.idealFor = [];
+      else u[key] = "";
+      return u;
+    };
+    setAppliedFilters(patch);
+    setFilters(patch);
+    setPage(1);
+  }, []);
 
-        if (key === "roomType") {
-          updated.roomType = "";
-        } else if (key === "roomTypes") {
-          updated.roomTypes = [];
-        } else if (key === "idealFor") {
-          updated.idealFor = [];
-        } else if (key === "price") {
-          updated.minPrice = "";
-          updated.maxPrice = "";
-        } else if (key === "genderPreference") {
-          updated.genderPreference = "";
-        } else {
-          (updated as any)[key] = "";
-        }
-
-        return updated;
-      });
-
-      setFilters((prev) => {
-        const updated = { ...prev };
-        if (key === "roomType") {
-          updated.roomType = "";
-        } else if (key === "roomTypes") {
-          updated.roomTypes = [];
-        } else if (key === "idealFor") {
-          updated.idealFor = [];
-        } else if (key === "price") {
-          updated.minPrice = "";
-          updated.maxPrice = "";
-        } else if (key === "genderPreference") {
-          updated.genderPreference = "";
-        } else {
-          (updated as any)[key] = "";
-        }
-        return updated;
-      });
-
-      setPage(1);
-    },
-    [], // ✅ No dependencies - uses functional setState
-  );
-
-  /* =============================
-     SORT CHANGE - useCallback for optimization
-  ============================== */
   const handleSortChange = useCallback((value: string) => {
     setSortBy(value);
     setPage(1);
   }, []);
 
-  /* =============================
-     SYNC URL
-  ============================== */
+  /* ── Sync URL ── */
   useEffect(() => {
-    const params = new URLSearchParams();
-
-    if (appliedFilters.city) params.set("city", appliedFilters.city);
-    if (appliedFilters.minPrice)
-      params.set("minPrice", appliedFilters.minPrice);
-    if (appliedFilters.maxPrice)
-      params.set("maxPrice", appliedFilters.maxPrice);
-    if (appliedFilters.roomType)
-      params.set("roomType", appliedFilters.roomType);
-    // ✅ NEW: Sync multi-select room types to URL
-    if (appliedFilters.roomTypes && appliedFilters.roomTypes.length > 0) {
-      params.set("roomTypes", appliedFilters.roomTypes.join(","));
-    }
-    // ✅ NEW: Sync gender preference to URL
-    if (
-      appliedFilters.genderPreference &&
-      appliedFilters.genderPreference !== "ANY"
-    ) {
-      params.set("genderPreference", appliedFilters.genderPreference);
-    }
-    // ✅ NEW: Sync ideal for to URL
-    if (appliedFilters.idealFor && appliedFilters.idealFor.length > 0) {
-      params.set("idealFor", appliedFilters.idealFor.join(","));
-    }
-    if (sortBy !== "latest") params.set("sort", sortBy);
-    if (page > 1) params.set("page", String(page));
-
-    setSearchParams(params);
+    const p = new URLSearchParams();
+    if (appliedFilters.city) p.set("city", appliedFilters.city);
+    if (appliedFilters.minPrice) p.set("minPrice", appliedFilters.minPrice);
+    if (appliedFilters.maxPrice) p.set("maxPrice", appliedFilters.maxPrice);
+    if (appliedFilters.roomType) p.set("roomType", appliedFilters.roomType);
+    if (appliedFilters.roomTypes?.length) p.set("roomTypes", appliedFilters.roomTypes.join(","));
+    if (appliedFilters.genderPreference && appliedFilters.genderPreference !== "ANY")
+      p.set("genderPreference", appliedFilters.genderPreference);
+    if (appliedFilters.idealFor?.length) p.set("idealFor", appliedFilters.idealFor.join(","));
+    if (sortBy !== "latest") p.set("sort", sortBy);
+    if (page > 1) p.set("page", String(page));
+    setSearchParams(p);
   }, [appliedFilters, sortBy, page, setSearchParams]);
 
-  /* =============================
-     FETCH NEXT PAGE (INFINITE SCROLL WITH CURSOR)
-  ============================== */
+  /* ── Fetch next page ── */
   const fetchNextPage = useCallback(async () => {
-    // ✅ CRITICAL FIX #1: Double-check loading state to prevent race conditions
-    if (loadingMore || !hasMore || loading.fetch) {
-      console.log("[RoomsListing] Fetch blocked:", {
-        loadingMore,
-        hasMore,
-        reduxLoading: loading.fetch,
-      });
-      return;
-    }
-
+    if (loadingMore || !hasMore || loading.fetch) return;
     setLoadingMore(true);
-    console.log("[RoomsListing] Fetching next page with cursor:", nextCursor);
-
     try {
-      // ✅ CURSOR PAGINATION: Pass cursor instead of calculating page
-      const nextPageFilters = { ...apiFilters, cursor: nextCursor };
-
-      // Dispatch fetch for next page
-      const result = await dispatch(fetchRooms(nextPageFilters)).unwrap();
-
-      // ✅ CRITICAL FIX #2: Verify we got valid response before processing
-      if (!result || !result.rooms || result.rooms.length === 0) {
-        console.log("[RoomsListing] No more rooms available");
-        setHasMore(false);
-        return;
-      }
-
-      // ✅ Update the cursor for next fetch
-      if (result.meta?.nextCursor) {
-        setNextCursor(result.meta.nextCursor);
-      }
-
-      // ✅ Append rooms instead of replacing
+      const result = await dispatch(fetchRooms({ ...apiFilters, cursor: nextCursor })).unwrap();
+      if (!result?.rooms?.length) { setHasMore(false); return; }
+      if (result.meta?.nextCursor) setNextCursor(result.meta.nextCursor);
       setAllRooms((prev) => {
-        // Deduplicate by room ID to prevent duplicates
-        const existingIds = new Set(prev.map((r) => r.id));
-        const newRooms = result.rooms.filter((r) => !existingIds.has(r.id));
-
-        // ✅ CRITICAL FIX #3: Only append if we actually got new rooms
-        if (newRooms.length === 0) {
-          console.warn("[RoomsListing] All returned rooms were duplicates");
-          return prev; // Don't update if all duplicates
-        }
-
-        return [...prev, ...newRooms];
+        const ids = new Set(prev.map((r) => r.id));
+        const fresh = result.rooms.filter((r: any) => !ids.has(r.id));
+        return fresh.length ? [...prev, ...fresh] : prev;
       });
-
-      // ✅ CRITICAL FIX #4: Check if we've reached the end
-      if (result.meta?.hasNextPage === false) {
-        setHasMore(false);
-        console.log("[RoomsListing] Reached end (hasNextPage=false)");
-      } else if (result.rooms.length < 20) {
-        setHasMore(false);
-        console.log("[RoomsListing] Reached end (less than limit)");
-      }
-    } catch (error) {
-      console.error("[RoomsListing] Error fetching next page:", error);
+      if (!result.meta?.hasNextPage || result.rooms.length < 20) setHasMore(false);
+    } catch (e) {
+      console.error("[RoomsListing] fetchNextPage error", e);
     } finally {
-      // ✅ CRITICAL: Always reset loading flag
       setLoadingMore(false);
     }
   }, [nextCursor, loadingMore, hasMore, apiFilters, dispatch, loading.fetch]);
 
-  /* =============================
-     FETCH DATA - STABILIZED DEPENDENCIES (FIX FOR INFINITE LOOP)
-     ✅ FIX #2: Use filterKey string instead of apiFilters object
-     ✅ FIX #3: Add mount guard to prevent double fetch
-     ✅ FIX #4: REMOVE apiFilters from dependency - only use filterKey
-  ============================== */
+  /* ── Initial fetch on filter change ── */
   const isFetchingRef = useRef(false);
-  const lastFetchKeyRef = useRef<string | null>(null);
+  const lastKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // ✅ FIX #4.1: Guard - skip if already fetching
-    if (isFetchingRef.current) {
-      console.log("[RoomsListing] Skipping fetch - already fetching");
-      return;
-    }
-
-    // ✅ FIX #4.2: Guard - skip if filterKey hasn't actually changed
-    if (lastFetchKeyRef.current === filterKey) {
-      console.log("[RoomsListing] Skipping fetch - filterKey unchanged");
-      return;
-    }
-
-    // ✅ FIX #4.3: ACTUAL FILTER CHANGE detected
-    console.log("[RoomsListing] Filters changed, resetting scroll state", {
-      newKey: filterKey,
-      oldKey: lastFetchKeyRef.current,
-    });
-
-    // Reset scroll pagination when filters change
+    if (isFetchingRef.current || lastKeyRef.current === filterKey) return;
     setAllRooms([]);
     setHasMore(true);
     setLoadingMore(false);
     setNextCursor(undefined);
-
-    // Mark key as fetched BEFORE dispatch
-    lastFetchKeyRef.current = filterKey;
+    lastKeyRef.current = filterKey;
     isFetchingRef.current = true;
+    dispatch(fetchRooms(apiFilters)).finally(() => { isFetchingRef.current = false; });
+  }, [filterKey, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    console.log("[RoomsListing] Fetching rooms with filters:", apiFilters);
-
-    // Dispatch fetch
-    // ✅ CRITICAL INSIGHT: apiFilters is SAFE to use without being in dependencies
-    //
-    // WHY? apiFilters useMemo depends on: [JSON.stringify(appliedFilters), sortBy, nextCursor]
-    // filterKey useMemo depends on: [appliedFilters, sortBy] (excludes nextCursor)
-    //
-    // INVARIANT: When filterKey changes → either appliedFilters or sortBy changed
-    //           → apiFilters MUST have changed too (same parent dependencies)
-    //
-    // nextCursor is NOT in filterKey because:
-    // - Cursor changes frequently during infinite scroll (not a filter change)
-    // - We don't want to re-fetch first page when cursor updates
-    // - When user changes filters, we reset nextCursor=undefined anyway
-    //
-    // RESULT: filterKey captures all meaningful filter changes
-    //         apiFilters auto-updates when filterKey updates
-    //         No infinite loop from object reference changes
-    dispatch(fetchRooms(apiFilters)).finally(() => {
-      isFetchingRef.current = false;
-    });
-  }, [filterKey, dispatch]); // ✅ FIX #4: Only stable string dependency + dispatch
-
-  /* =============================
-     INFINITE SCROLL OBSERVER SETUP
-  ============================== */
+  /* ── Sync Redux rooms → allRooms (first load) ── */
   useEffect(() => {
-    // ✅ Append initial rooms when Redux rooms update
     if (rooms.length > 0) {
-      setAllRooms((prev) => {
-        if (prev.length === 0) {
-          // First fetch: use all rooms
-          return rooms;
-        }
-        // Subsequent fetches: rooms already appended in fetchNextPage
-        return prev;
-      });
-
-      // Determine if more data exists
-      if (meta?.total && rooms.length >= meta.total) {
+      setAllRooms((prev) => (prev.length === 0 ? rooms : prev));
+      if ((meta?.total && rooms.length >= meta.total) || rooms.length < 20)
         setHasMore(false);
-      } else if (rooms.length < 20) {
-        // Less than limit means we hit the end
-        setHasMore(false);
-      }
     }
   }, [rooms, loading.fetch, meta]);
 
-  /* =============================
-     INTERSECTION OBSERVER for sentinel
-     ✅ FIX #3: Don't depend on fetchNextPage to prevent re-setup
-  ============================== */
+  /* ── Intersection observer ── */
   useEffect(() => {
     if (!sentinelRef.current) return;
-
     observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        // Use closure to capture current state values
+      ([entry]) => {
         if (
           entry.isIntersecting &&
           hasMore &&
           !loadingMore &&
           !loading.fetch &&
           !isFetchingRef.current
-        ) {
-          console.log("[RoomsListing] Sentinel visible - fetching next page");
+        )
           fetchNextPage();
-        }
       },
       {
-        root: null,
-        rootMargin: "100px",
+        // ✅ root = scroll container so intersection fires within scrollable area
+        root: gridScrollRef.current,
+        rootMargin: "200px",
         threshold: 0.1,
-      },
-    );
-
-    observerRef.current.observe(sentinelRef.current);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
       }
-    };
-  }, [hasMore, loadingMore, loading.fetch]); // ✅ Removed fetchNextPage from deps
+    );
+    observerRef.current.observe(sentinelRef.current);
+    return () => observerRef.current?.disconnect();
+  }, [hasMore, loadingMore, loading.fetch, fetchNextPage]);
 
-  // ✅ DEBUG: Log state changes
-  useEffect(() => {
-    console.log("[RoomsListing] State updated:", {
-      allRoomsCount: allRooms.length,
-      initialRoomsCount: rooms.length,
-      isLoading: loading.fetch,
-      isLoadingMore: loadingMore,
-      hasMore,
-      hasError: !!meta?.total === false,
-      totalFromMeta: meta?.total,
-      firstRoomId: allRooms[0]?.id || "N/A",
-    });
-  }, [allRooms, rooms, loading.fetch, loadingMore, hasMore, meta]);
+  /* ── Derived ── */
+  const isInitialLoading = loading.fetch && allRooms.length === 0;
+  const isEmpty = !isInitialLoading && allRooms.length === 0;
 
-  /* =============================
-     UI
-  ============================== */
+  /* ─────────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-cream dark:bg-slate-950">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* HEADER */}
-        <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Find Your Stay
-            </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {meta?.total || 0} properties
-            </p>
+    <div className="h-screen bg-[#f8f6f1] dark:bg-[#0d0b06] flex flex-col overflow-hidden">
+
+      {/* Page header */}
+      <div className="w-full px-6 lg:px-8 py-6 flex-shrink-0 border-b border-slate-200/50 dark:border-slate-800/50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1
+                className="text-3xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-white"
+                style={{ fontFamily: "'Playfair Display', serif" }}
+              >
+                Find Your Stay
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {meta?.total
+                  ? `${meta.total.toLocaleString()} properties available`
+                  : "Browse all properties"}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => setIsFilterOpen(true)}
+                className="lg:hidden inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all hover:scale-[1.02]"
+                style={{
+                  background: "rgba(212,175,55,0.1)",
+                  border: "1px solid rgba(212,175,55,0.3)",
+                  color: "rgba(212,175,55,0.9)",
+                }}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+              </button>
+
+              <select
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:shadow-md outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-300/30 cursor-pointer"
+              >
+                {sortOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setIsFilterOpen(true)}
-              className="lg:hidden inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm transition hover:border-gold hover:text-gold"
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-            </button>
+      {/* Sidebar + grid */}
+      <div className="flex-1 flex overflow-hidden">
 
-            <select
-              value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/20"
-            >
-              <option value="latest">Latest</option>
-              <option value="most_viewed">Most Viewed</option>
-              <option value="most_contacted">Most Contacted</option>
-              <option value="price_low">Price Low → High</option>
-              <option value="price_high">Price High → Low</option>
-            </select>
+        {/* Desktop sidebar — has its own independent scroll, doesn't affect grid */}
+        <div className="hidden lg:flex h-full w-72 flex-col flex-shrink-0 border-r border-slate-200/70 dark:border-slate-800/60 bg-white dark:bg-[#0d0b06]">
+          <div className="h-full overflow-y-auto px-4">
+            <FilterSidebar
+              filters={filters}
+              setFilters={setFilters}
+              onApplyFilters={handleApplyFilters}
+              isOpen={isFilterOpen}
+              onClose={() => setIsFilterOpen(false)}
+            />
           </div>
         </div>
 
-        {/* FILTER CHIPS */}
-        <div className="mb-6">
-          <FilterChips
-            appliedFilters={appliedFilters}
-            onRemoveFilter={handleRemoveFilter}
-          />
-        </div>
+        {/* ─────────────────────────────────────────────
+          ✅ THE SINGLE SCROLL CONTAINER FOR THE GRID
+          - gridScrollRef attached here
+          - overflow-y-auto is ONLY here (not in VirtualizedGrid)
+          - VirtualizedGrid receives this ref → virtualizer
+            attaches to this element → ONE scrollbar total
+          - Sentinel lives inside here so IntersectionObserver
+            fires relative to this scroll container
+        ───────────────────────────────────────────── */}
+        <div
+          ref={gridScrollRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
+          style={{
+            // Hide scrollbar cross-browser while keeping scroll functional
+            msOverflowStyle: "none",  // IE / Edge
+            scrollbarWidth: "none",   // Firefox
+          }}
+        >
+          <div className="mx-auto w-full max-w-[1400px] px-6 lg:px-8 py-6">
 
-        {/* CONTENT */}
-        <div className="flex items-start gap-6">
-          <FilterSidebar
-            filters={filters}
-            setFilters={setFilters}
-            onApplyFilters={handleApplyFilters}
-            isOpen={isFilterOpen}
-            onClose={() => setIsFilterOpen(false)}
-          />
+            {/* Filter chips */}
+            {appliedFilters && (
+              <div className="mb-6">
+                <FilterChips
+                  appliedFilters={appliedFilters}
+                  onRemoveFilter={handleRemoveFilter}
+                />
+              </div>
+            )}
 
-          {/* GRID */}
-          <div className="min-w-0 flex-1">
-            {loading.fetch && allRooms.length === 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {[...Array(6)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-[300px] rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 animate-pulse"
-                  />
+            {isInitialLoading ? (
+              <div className="grid gap-3 sm:gap-5 md:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <SkeletonCard key={i} />
                 ))}
               </div>
-            ) : allRooms.length ? (
-              <div>
+            ) : isEmpty ? (
+              <div className="flex flex-col items-center justify-center py-32 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/30">
+                <Search
+                  className="mb-4 h-12 w-12 opacity-20"
+                  style={{ color: "rgba(212,175,55,0.6)" }}
+                />
+                <p className="text-lg font-semibold text-slate-500 dark:text-slate-400">
+                  No properties found
+                </p>
+                <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+                  Try adjusting your filters
+                </p>
+              </div>
+            ) : (
+              <>
+                {/*
+                  ✅ VirtualizedGrid changes:
+                  - containerHeight prop REMOVED (no longer exists)
+                  - scrollContainerRef={gridScrollRef} passed in
+                  - key resets virtualizer on column/data change
+                */}
                 <VirtualizedGrid
+                  key={`grid-${columns}-${allRooms.length}`}
+                  scrollContainerRef={gridScrollRef}
                   items={allRooms}
                   renderItem={(room) => <RoomCard room={room} />}
-                  columns={3}
-                  estimateSize={400}
-                  overscan={5}
-                  className="px-0"
-                  containerClassName="px-0"
+                  columns={columns}
+                  estimateSize={estimateSize}
+                  overscan={4}
                 />
 
-                {/* ✅ SENTINEL DIV for infinite scroll */}
-                <div ref={sentinelRef} className="py-8 text-center">
+                {/* Infinite scroll sentinel — inside the scroll container */}
+                <div ref={sentinelRef} className="mt-4 py-8 flex justify-center">
                   {loadingMore && (
-                    <div className="inline-flex items-center gap-2">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold/30 border-t-gold"></div>
-                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                        Loading more...
-                      </span>
+                    <div
+                      className="inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 text-sm font-medium"
+                      style={{
+                        background: "rgba(212,175,55,0.08)",
+                        border: "1px solid rgba(212,175,55,0.2)",
+                        color: "rgba(212,175,55,0.85)",
+                      }}
+                    >
+                      <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Loading more…
                     </div>
                   )}
                   {!hasMore && allRooms.length > 0 && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      No more properties to load
+                    <p className="text-sm text-slate-400 dark:text-slate-500 tracking-wide">
+                      — All {allRooms.length} properties loaded —
                     </p>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 py-20 text-center">
-                <Search className="mx-auto mb-4 h-10 w-10 opacity-30" />
-                <p className="text-slate-600 dark:text-slate-300">
-                  No properties found
-                </p>
-              </div>
+              </>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

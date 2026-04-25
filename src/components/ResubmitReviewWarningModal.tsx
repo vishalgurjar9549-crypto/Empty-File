@@ -1,5 +1,13 @@
-import React, { useEffect, useId, useRef } from 'react';
-import { AlertTriangle, CheckCircle2, RefreshCw, X, Pencil } from 'lucide-react';
+
+import React, { useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  X,
+  Pencil,
+} from "lucide-react";
 
 interface ResubmitReviewWarningModalProps {
   isOpen: boolean;
@@ -28,16 +36,13 @@ export function ResubmitReviewWarningModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const originalOverflow = document.body.style.overflow;
     lastFocusedElementRef.current = document.activeElement as HTMLElement;
-    document.body.style.overflow = 'hidden';
 
     const timeout = setTimeout(() => {
       closeButtonRef.current?.focus();
     }, 0);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
       clearTimeout(timeout);
       lastFocusedElementRef.current?.focus();
     };
@@ -49,13 +54,13 @@ export function ResubmitReviewWarningModal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!dialogRef.current) return;
 
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         onClose();
         return;
       }
 
-      if (e.key === 'Tab') {
+      if (e.key === "Tab") {
         const focusableElements = dialogRef.current.querySelectorAll<
           HTMLButtonElement | HTMLAnchorElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
         >(
@@ -63,7 +68,7 @@ export function ResubmitReviewWarningModal({
         );
 
         const focusable = Array.from(focusableElements).filter(
-          (el) => !el.hasAttribute('hidden') && el.offsetParent !== null
+          (el) => !el.hasAttribute("hidden") && el.offsetParent !== null
         );
 
         if (focusable.length === 0) return;
@@ -85,8 +90,8 @@ export function ResubmitReviewWarningModal({
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -95,9 +100,9 @@ export function ResubmitReviewWarningModal({
 
   if (!isOpen) return null;
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto overscroll-contain"
       onClick={handleOverlayClick}
       aria-hidden="true"
     >
@@ -132,7 +137,8 @@ export function ResubmitReviewWarningModal({
                       id={descriptionId}
                       className="mt-1 text-sm text-orange-50/95"
                     >
-                      Please confirm that you’ve reviewed and fixed the admin feedback before sending it back for approval.
+                      Please confirm that you’ve reviewed and fixed the admin
+                      feedback before sending it back for approval.
                     </p>
                   </div>
                 </div>
@@ -168,11 +174,11 @@ export function ResubmitReviewWarningModal({
 
               <ul className="mt-3 space-y-2.5">
                 {[
-                  'Reviewed the admin feedback carefully',
-                  'Updated incorrect property details',
-                  'Replaced misleading or incorrect images',
-                  'Checked rent, location, amenities, and room info',
-                  'Saved all your latest changes before resubmitting',
+                  "Reviewed the admin feedback carefully",
+                  "Updated incorrect property details",
+                  "Replaced misleading or incorrect images",
+                  "Checked rent, location, amenities, and room info",
+                  "Saved all your latest changes before resubmitting",
                 ].map((item, index) => (
                   <li
                     key={index}
@@ -190,8 +196,9 @@ export function ResubmitReviewWarningModal({
                 What happens after resubmitting?
               </p>
               <p className="mt-2 text-sm leading-relaxed text-blue-800 dark:text-blue-200">
-                Your property will be sent back to the admin team and may go under review again.
-                Until approval, some visibility or actions may remain limited.
+                Your property will be sent back to the admin team and may go
+                under review again. Until approval, some visibility or actions
+                may remain limited.
               </p>
             </div>
           </div>
@@ -214,8 +221,10 @@ export function ResubmitReviewWarningModal({
                 disabled={loading}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-navy px-5 text-sm font-semibold text-white transition hover:bg-navy/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy/30 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
               >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Resubmitting...' : 'Yes, Resubmit'}
+                <RefreshCw
+                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
+                {loading ? "Resubmitting..." : "Yes, Resubmit"}
               </button>
             </div>
           </div>
@@ -223,4 +232,6 @@ export function ResubmitReviewWarningModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

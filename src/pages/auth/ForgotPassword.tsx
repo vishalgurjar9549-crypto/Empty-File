@@ -3,27 +3,18 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail, ArrowLeft } from "lucide-react";
 
 import { useAppDispatch } from "../../store/hooks";
-import { Button } from "../../components/ui/Button";
 import { authApi } from "../../api/auth.api";
 import { showToast } from "../../store/slices/ui.slice";
+
+const gold = "rgba(212,175,55,0.9)";
+const goldSoft = "rgba(212,175,55,0.12)";
+const goldBorder = "rgba(212,175,55,0.25)";
 
 type FormErrors = {
   email?: string;
   general?: string;
 };
 
-/**
- * FORGOT PASSWORD PAGE
- *
- * Allows users to request a password reset via email.
- *
- * Features:
- * - Email validation
- * - Loading state during submission
- * - Success message when email is sent
- * - Link back to login
- * - Responsive design
- */
 export function ForgotPassword() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -33,7 +24,7 @@ export function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const errorSummaryRef = useRef<HTMLDivElement | null>(null);
+  const errorRef = useRef<HTMLDivElement | null>(null);
 
   const isFormValid = useMemo(() => {
     return email.trim().length > 0 && !formErrors.email;
@@ -41,265 +32,218 @@ export function ForgotPassword() {
 
   useEffect(() => {
     if (formErrors.general) {
-      errorSummaryRef.current?.focus();
+      errorRef.current?.focus();
     }
   }, [formErrors.general]);
 
   const validateEmail = (value: string) => {
     if (!value.trim()) return "Email is required";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
-      return "Please enter a valid email address";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      return "Enter a valid email address";
     }
     return "";
   };
 
-  const validate = () => {
-    const newErrors: FormErrors = {};
-    const emailError = validateEmail(email);
-
-    if (emailError) newErrors.email = emailError;
-
-    setFormErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleEmailChange = (value: string) => {
-    setEmail(value);
-    setFormErrors((prev) => ({
-      ...prev,
-      email: prev.email ? validateEmail(value) || undefined : prev.email,
-      general: undefined,
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate()) return;
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setFormErrors({ email: emailError });
+      return;
+    }
 
     setLoading(true);
 
     try {
       await authApi.requestPasswordReset(email.trim());
 
-      // Show success message
       dispatch(
         showToast({
-          message: "Check your email for password reset instructions",
+          message: "Reset link sent successfully",
           type: "success",
         })
       );
 
       setSubmitted(true);
+      setTimeout(() => navigate("/auth/login"), 2500);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message || "Something went wrong. Try again.";
 
-      // After a few seconds, navigate back to login
-      setTimeout(() => {
-        navigate("/auth/login");
-      }, 3000);
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to request password reset";
+      setFormErrors({ general: msg });
 
       dispatch(
         showToast({
-          message: errorMessage,
+          message: msg,
           type: "error",
         })
       );
-
-      setFormErrors({ general: errorMessage });
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ SUCCESS SCREEN
   if (submitted) {
     return (
-      <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
-        <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg dark:shadow-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
-            {/* Icon */}
-            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+      <main className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#0d0b06] transition-colors">
+        <section className="w-full max-w-md text-center">
+          <div
+            className="p-8 rounded-2xl border backdrop-blur-lg shadow-xl"
+            style={{ borderColor: goldBorder, background: goldSoft }}
+          >
+            <div
+              className="w-16 h-16 mx-auto mb-5 rounded-full flex items-center justify-center"
+              style={{ background: goldSoft }}
+            >
+              <Mail className="w-7 h-7" style={{ color: gold }} />
             </div>
 
-            {/* Heading */}
-            <h2 className="text-2xl font-bold text-navy dark:text-white mb-2">
+            <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
               Check your email
             </h2>
 
-            {/* Description */}
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
-              We've sent a password reset link to{" "}
-              <span className="font-semibold text-navy dark:text-white">{email}</span>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Reset link sent to <strong>{email}</strong>
             </p>
 
-            {/* Instructions */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6 text-left">
-              <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
-                <strong>Next steps:</strong>
-              </p>
-              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
-                <li>Check your email (including spam folder)</li>
-                <li>Click the reset link</li>
-                <li>Enter your new password</li>
-                <li>Login with your new password</li>
-              </ul>
-            </div>
-
-            {/* Link timeout message */}
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-6">
-              The reset link expires in 20 minutes for security
-            </p>
-
-            {/* Redirect message */}
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Redirecting to login in 3 seconds...
+            <p className="text-xs text-gray-500">
+              Redirecting to login...
             </p>
           </div>
-
-          {/* Help text */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-              Didn't receive the email?
-            </p>
-            <Link
-              to="/auth/forgot-password"
-              className="text-sm font-semibold text-navy dark:text-white hover:text-navy/80 dark:hover:text-slate-300 transition-colors"
-            >
-              Try again
-            </Link>
-          </div>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
-      <div className="w-full max-w-md">
-        {/* Back Button */}
+    <main
+      className="
+      min-h-screen
+      px-4
+      pt-10 pb-6
+
+      flex flex-col
+      justify-start
+
+      bg-gray-50 dark:bg-[#0d0b06]
+      transition-colors
+    "
+    >
+      <section className="w-full max-w-md mx-auto">
+
+        {/* Back */}
         <Link
           to="/auth/login"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-navy dark:hover:text-white transition-colors mb-6"
+          className="
+          inline-flex items-center gap-2 text-sm mb-4
+          text-gray-600 dark:text-gray-400
+          hover:text-black dark:hover:text-white transition
+        "
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft size={16} />
           Back to login
         </Link>
 
         {/* Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg dark:shadow-2xl p-8 animate-in fade-in zoom-in duration-300">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-navy dark:text-white mb-2">
-              Forgot password?
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Enter your email to receive reset instructions
-            </p>
-          </div>
-
-          {/* Error Alert */}
-          {formErrors.general && (
-            <div
-              ref={errorSummaryRef}
-              role="alert"
-              tabIndex={-1}
-              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
-            >
-              <p className="text-sm font-medium text-red-800 dark:text-red-400">
-                {formErrors.general}
+        <div className="rounded-2xl p-[1px] bg-gradient-to-br from-[#d4af37]/40 to-transparent">
+          <div
+            className="
+            rounded-2xl p-6 sm:p-8 shadow-xl
+            bg-white dark:bg-[#111]
+            transition-colors
+          "
+          >
+            {/* Header */}
+            <div className="mb-6 sm:mb-8">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+                Forgot Password
+              </h1>
+              <p className="text-sm mt-2 text-gray-600 dark:text-gray-400">
+                Enter your email to receive a reset link
               </p>
             </div>
-          )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {/* Email Field */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-semibold text-navy dark:text-white mb-2"
-              >
-                Email
+            {/* Input */}
+            <div className="mb-5">
+              <label className="text-sm mb-2 block text-gray-700 dark:text-gray-300">
+                Email address
               </label>
+
               <input
-                id="email"
                 type="email"
                 value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
-                onBlur={() => {
-                  if (email.trim()) {
-                    setFormErrors((prev) => ({
-                      ...prev,
-                      email: validateEmail(email) || undefined,
-                    }));
-                  }
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setFormErrors({});
                 }}
                 placeholder="you@example.com"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-colors outline-none ${
-                  formErrors.email
-                    ? "border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-700"
-                    : "border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                } text-navy dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-navy dark:focus:border-white`}
-                disabled={loading}
+                className="
+                  w-full px-4 py-3 rounded-xl border outline-none transition
+
+                  bg-white dark:bg-black
+                  text-gray-900 dark:text-white
+                  placeholder-gray-400 dark:placeholder-gray-500
+
+                  border-gray-300 dark:border-gray-800
+                  focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37]
+                "
               />
+
               {formErrors.email && (
-                <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">
+                <p className="text-red-500 dark:text-red-400 text-sm mt-2">
                   {formErrors.email}
                 </p>
               )}
             </div>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
+            {/* Button */}
+            <button
+              onClick={handleSubmit as any}
               disabled={!isFormValid || loading}
-              className="bg-navy dark:bg-white text-white dark:text-navy hover:bg-navy/90 dark:hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="
+                w-full py-3.5 rounded-xl font-semibold text-base
+                bg-[#d4af37] text-black
+                hover:brightness-110
+                active:scale-[0.98]
+                disabled:opacity-50 disabled:cursor-not-allowed
+              "
             >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  Sending...
-                </span>
-              ) : (
-                "Send Reset Link"
-              )}
-            </Button>
+              {loading ? "Sending..." : "Send Reset Link"}
+            </button>
 
             {/* Info */}
-            <p className="text-center text-xs text-slate-500 dark:text-slate-500">
-              We'll send a secure link to your email (valid for 20 minutes)
+            <p className="text-xs text-center mt-4 text-gray-500">
+              Link valid for 10 minutes
             </p>
-          </form>
+          </div>
         </div>
 
-        {/* Footer Links */}
-        <div className="mt-6 text-center space-y-3">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+        {/* Footer */}
+        <div className="mt-5 text-center text-sm space-y-1.5 text-gray-600 dark:text-gray-400">
+          <p>
             Remember your password?{" "}
             <Link
               to="/auth/login"
-              className="font-semibold text-navy dark:text-white hover:underline"
+              className="text-black dark:text-white hover:underline"
             >
               Sign in
             </Link>
           </p>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Don't have an account?{" "}
+
+          <p>
+            New here?{" "}
             <Link
               to="/auth/register"
-              className="font-semibold text-navy dark:text-white hover:underline"
+              className="text-black dark:text-white hover:underline"
             >
-              Sign up
+              Create account
             </Link>
           </p>
         </div>
-      </div>
-    </div>
+
+      </section>
+    </main>
   );
 }

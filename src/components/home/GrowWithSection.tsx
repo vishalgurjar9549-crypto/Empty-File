@@ -58,7 +58,7 @@ export default function GrowWithSection() {
 
   return (
     <>
-      <section className="relative overflow-hidden bg-background py-6 sm:py-8 lg:py-12">
+      <section className="relative overflow-hidden bg-background py-12 md:py-16 lg:py-20">
         {/* Ambient background */}
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-[-80px] top-10 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl dark:bg-yellow-500/10" />

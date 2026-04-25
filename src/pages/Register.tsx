@@ -88,16 +88,16 @@ export function Register() {
   };
 
   const normalizePhone = (value: string) => {
-    // keep only digits and one leading +
-    let cleaned = value.replace(/[^\d+]/g, "");
+  let cleaned = value.replace(/[^\d+]/g, "");
 
-    // allow + only at the beginning
-    if (cleaned.includes("+")) {
-      cleaned = "+" + cleaned.replace(/\+/g, "").replace(/^\+/, "");
-    }
+  if (cleaned.includes("+")) {
+    cleaned = "+" + cleaned.replace(/\+/g, "").replace(/^\+/, "");
+  }
 
-    return cleaned;
-  };
+  return cleaned.startsWith("+91")
+  ? cleaned.slice(0, 13)
+  : cleaned.slice(0, 10);
+};
 
   const validatePhone = (value: string) => {
     const phone = normalizePhone(value);
@@ -346,20 +346,21 @@ export function Register() {
             Phone number
           </label>
           <input
-            id="phone"
-            name="phone"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            value={formData.phone}
-            onChange={(e) =>
-              updateField("phone", normalizePhone(e.target.value))
-            }
-            aria-invalid={!!formErrors.phone}
-            aria-describedby={formErrors.phone ? "phone-error" : undefined}
-            className={inputClass("phone")}
-            placeholder="+91 9876543210"
-          />
+  id="phone"
+  name="phone"
+  type="tel"
+  inputMode="tel"
+  autoComplete="tel"
+  value={formData.phone}
+  onChange={(e) =>
+    updateField("phone", normalizePhone(e.target.value).slice(0, 12))
+  }
+  aria-invalid={!!formErrors.phone}
+  aria-describedby={formErrors.phone ? "phone-error" : undefined}
+  className={inputClass("phone")}
+  placeholder="+91 9876543210"
+  maxLength={12} // ✅ correct way
+/>
           {formErrors.phone && (
             <p
               id="phone-error"

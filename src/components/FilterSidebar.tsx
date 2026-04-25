@@ -1,5 +1,7 @@
-import { useEffect, useState, memo } from "react";
-import { X, Filter } from "lucide-react";
+
+import { useEffect, useState, memo, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { X, SlidersHorizontal } from "lucide-react";
 import { useAppSelector } from "../store/hooks";
 import {
   ROOM_TYPE_OPTIONS,
@@ -18,15 +20,39 @@ interface FilterSidebarProps {
   resultCount?: number;
 }
 
-const MAX_RENT = 500000; // industry upper bound
+const MAX_RENT = 500_000;
 const MIN_RENT = 0;
 
-const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
+const normalizeCityValue = (name: string) => name.trim().toLowerCase();
 
 /**
- * ✅ OPTIMIZATION: FilterSidebar wrapped with React.memo
- * Prevents re-renders when parent re-renders but filter state is unchanged
+ * Custom hook to detect mobile viewport
+ * Returns true if screen width < 1024px (lg breakpoint)
  */
+function useMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => 
+    typeof window !== "undefined" ? window.innerWidth < 1024 : true
+  );
+
+  useEffect(() => {
+    let resizeTimer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        setIsMobile(window.innerWidth < 1024);
+      }, 150);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return isMobile;
+}
+
 function FilterSidebarComponent({
   filters,
   setFilters,
@@ -34,404 +60,299 @@ function FilterSidebarComponent({
   isOpen,
   onClose,
   isLoading = false,
-  resultCount = 0
+  resultCount = 0,
 }: FilterSidebarProps) {
-  const {
-    cities
-  } = useAppSelector((state) => state.metadata);
+  const { cities } = useAppSelector((s) => s.metadata);
+  const [local, setLocal] = useState(filters);
+  const isMobile = useMobileViewport();
 
-  // Local state for editing filters
-  const [localFilters, setLocalFilters] = useState(filters);
+  useEffect(() => setLocal(filters), [filters]);
 
-  // Update local filters when props change
+  /* Lock body scroll when mobile drawer is open */
   useEffect(() => {
-    setLocalFilters(filters);
-  }, [filters]);
+    if (!isMobile) return; // Only for mobile
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen, isMobile]);
 
-  // ✅ REMOVED: Cities are loaded at App level via useInitializeAppData
-  // No need to fetch again here - just consume from Redux state
 
-  // Calculate active filter count
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (localFilters.city) count++;
-    if (localFilters.minPrice || localFilters.maxPrice) count++;
-    if (localFilters.roomType) count++;
-    if (localFilters.roomTypes && localFilters.roomTypes.length > 0) count++;
-    // ✅ NEW: Count gender preference filter
-    if (localFilters.genderPreference && localFilters.genderPreference !== "ANY") count++;
-    // ✅ NEW: Count ideal for filter
-    if (localFilters.idealFor && localFilters.idealFor.length > 0) count++;
-    return count;
-  };
-  // Lock body scroll when mobile menu is open
-  // useEffect(() => {
-  //   if (isOpen) {
-  //     document.body.style.overflow = 'hidden';
-  //   } else {
-  //     document.body.style.overflow = '';
-  //   }
-  //   return () => {
-  //     document.body.style.overflow = '';
-  //   };
-  // }, [isOpen]);
-  
-  // useEffect(() => {
-  //   if (isOpen) {
-  //     document.body.style.overflow = "hidden";
-  //   } else {
-  //     document.body.style.overflow = "";
-  //   }
-  //   return () => {
-  //     document.body.style.overflow = "";
-  //   };
-  // }, [isOpen]);
+  const activeCount = (() => {
+    let n = 0;
+    if (local.city) n++;
+    if (local.minPrice || local.maxPrice) n++;
+    if (local.roomType) n++;
+    if (local.roomTypes?.length) n++;
+    if (local.genderPreference && local.genderPreference !== "ANY") n++;
+    if (local.idealFor?.length) n++;
+    return n;
+  })();
 
-  useEffect(() => {
-  if (isOpen) {
-    document.body.style.overflow = "hidden";
-  }
+  const set = (key: string, value: any) => setLocal((p: any) => ({ ...p, [key]: value }));
 
-  return () => {
-    document.body.style.overflow = "auto";
-  };
-}, [isOpen]);
-
-  const handleChange = (key: string, value: any) => {
-    setLocalFilters({
-      ...localFilters,
-      [key]: value
-    });
+  const toggleInArray = (key: string, value: string) => {
+    const arr: string[] = local[key] || [];
+    set(key, arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
   };
 
-  // ✅ NEW: Multi-select room type handler
-  const handleRoomTypeToggle = (roomTypeValue: string) => {
-    const currentRoomTypes = localFilters.roomTypes || [];
-    const newRoomTypes = currentRoomTypes.includes(roomTypeValue)
-      ? currentRoomTypes.filter((rt: string) => rt !== roomTypeValue)
-      : [...currentRoomTypes, roomTypeValue];
-    
-    setLocalFilters({
-      ...localFilters,
-      roomTypes: newRoomTypes,
-      roomType: undefined, // Clear single selection when using multi-select
-    });
+  const handlePrice = (key: "minPrice" | "maxPrice", raw: string) => {
+    let n = Math.max(MIN_RENT, Math.min(Number(raw) || 0, MAX_RENT));
+    let u = { ...local, [key]: n };
+    if (key === "minPrice" && local.maxPrice && n > local.maxPrice) u.maxPrice = n;
+    if (key === "maxPrice" && local.minPrice && n < local.minPrice) u.minPrice = n;
+    setLocal(u);
   };
 
-  const handlePriceChange = (key: "minPrice" | "maxPrice", value: string) => {
-    let num = Number(value);
-    if (isNaN(num)) num = 0;
-    num = Math.max(MIN_RENT, Math.min(num, MAX_RENT));
+  const applyFilters = () => { setFilters(local); onApplyFilters(local); onClose(); };
 
-    let updatedFilters = { ...localFilters, [key]: num };
-    if (key === "minPrice" && localFilters.maxPrice && num > localFilters.maxPrice) {
-      updatedFilters.maxPrice = num;
-    }
-    if (key === "maxPrice" && localFilters.minPrice && num < localFilters.minPrice) {
-      updatedFilters.minPrice = num;
-    }
-
-    setLocalFilters(updatedFilters);
+  const clearAll = () => {
+    const blank = { city: "", minPrice: "", maxPrice: "", roomType: "", roomTypes: [], genderPreference: "", idealFor: [] };
+    setLocal(blank); setFilters(blank); onApplyFilters(blank);
   };
 
-  const handleApplyFilters = () => {
-    setFilters(localFilters);
-    onApplyFilters(localFilters);
-    onClose();
-  };
+  /* ── Shared class helpers ── */
+  const filterBtn = (active: boolean) =>
+    `py-2.5 px-3 rounded-xl border-2 font-medium text-sm transition-all cursor-pointer text-left ${
+      active
+        ? "border-[rgba(212,175,55,0.7)] bg-[rgba(212,175,55,0.12)] text-[rgba(212,175,55,0.95)]"
+        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:border-[rgba(212,175,55,0.4)]"
+    }`;
 
-  const handleClearAll = () => {
-    const clearedFilters = {
-      city: '',
-      minPrice: '',
-      maxPrice: '',
-      roomType: '',
-      roomTypes: [], // ✅ Multi-select clear
-      // ✅ NEW: Clear gender preference
-      genderPreference: '',
-      // ✅ NEW: Clear ideal for
-      idealFor: [],
-    };
-    setLocalFilters(clearedFilters);
-    setFilters(clearedFilters);
-    onApplyFilters(clearedFilters);
-  };
-  return <>
-      {/* Overlay for mobile */}
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={onClose} aria-hidden="true" />
+  const sectionLabel = "mb-3 block text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500";
 
-      <aside style={{
-      paddingTop: "env(safe-area-inset-top)",
-      paddingBottom: "env(safe-area-inset-bottom)"
-    }} className={`
-    fixed inset-y-0 left-0 z-50 w-full max-w-[300px]
-    bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800
-    shadow-2xl transform transition-transform duration-300 ease-in-out
-    lg:translate-x-0 lg:static lg:shadow-none lg:z-0 lg:h-auto lg:block
-    ${isOpen ? "translate-x-0" : "-translate-x-full"}
-  `}>
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="pt-6 px-5 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-gold" />
-              <h2 className="text-lg font-bold text-navy dark:text-white font-playfair">
-                Filters
-              </h2>
-              {getActiveFilterCount() > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-gold text-white text-xs font-bold rounded-full">
-                  {getActiveFilterCount()}
-                </span>
-              )}
-            </div>
-            <button onClick={onClose} className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors" aria-label="Close filters">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-8">
-            {/* City */}
-            <div>
-              <label
-                htmlFor="filter-city"
-                className="mb-3 flex items-center gap-1 text-sm font-semibold text-navy dark:text-white uppercase tracking-wider"
-              >
-                <span>Location</span>
-              </label>
-              <div className="relative">
-                <select
-                  id="filter-city"
-                  value={localFilters.city || ""}
-                  onChange={(e) => handleChange("city", e.target.value)}
-                  aria-label="Filter by city"
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer hover:border-gold"
-                >
-                  <option value="">All Cities</option>
-                  {cities.map((c) => (
-                    <option key={c.id} value={normalizeCityValue(c.name)}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Price Range */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Price Range (₹)
-              </h3>
-              <div className="flex gap-3 items-center">
-                {/* <input type="number" placeholder="Min" value={filters.minPrice || ""} onChange={(e) => handleChange("minPrice", e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all placeholder:text-slate-400" /> */}
-                <input
-  type="number"
-  placeholder="Min"
-  min={MIN_RENT}
-  max={MAX_RENT}
-  step="500"
-  value={localFilters.minPrice ?? ""}
-  onChange={(e) => handlePriceChange("minPrice", e.target.value)}
-  className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all placeholder:text-slate-400"
-/>
-
-                <span className="text-slate-400">-</span>
-                {/* <input type="number" placeholder="Max" value={filters.maxPrice || ""} onChange={(e) => handleChange("maxPrice", e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all placeholder:text-slate-400" /> */}
-                <input
-  type="number"
-  placeholder="Max"
-  min={MIN_RENT}
-  max={MAX_RENT}
-  step="500"
-  value={localFilters.maxPrice ?? ""}
-  onChange={(e) => handlePriceChange("maxPrice", e.target.value)}
-  className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all placeholder:text-slate-400"
-/>
-              </div>
-            </div>
-
-            {/* Room Type */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Room Type
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {ROOM_TYPE_OPTIONS.map((type) => {
-                  // ✅ NEW: Check multi-select array first, then fallback to single selection
-                  const isSelected = 
-                    (localFilters.roomTypes || []).includes(type.value) ||
-                    localFilters.roomType === type.value;
-                  
-                  return (
-                    <button
-                      key={type.value}
-                      onClick={() => {
-                        handleRoomTypeToggle(type.value);
-                      }}
-                      className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
-                      }`}
-                    >
-                      {type.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ✅ NEW: Gender Preference */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Gender Preference
-              </h3>
-              <div className="grid grid-cols-1 gap-2">
-                {GENDER_PREFERENCE_UI_OPTIONS.map((gender) => {
-                  const isSelected = localFilters.genderPreference === gender.value;
-                  
-                  return (
-                    <button
-                      key={gender.value}
-                      onClick={() => {
-                        setLocalFilters((prev: any) => ({
-                          ...prev,
-                          genderPreference: isSelected ? '' : gender.value,
-                        }));
-                      }}
-                      className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
-                      }`}
-                    >
-                      {gender.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ✅ NEW: Budget Predefined Ranges */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Budget
-              </h3>
-              <div className="space-y-2">
-                {BUDGET_RANGES.map((range) => {
-                  const isSelected =
-                    localFilters.minPrice === range.min &&
-                    localFilters.maxPrice === range.max;
-
-                  return (
-                    <button
-                      key={range.label}
-                      onClick={() => {
-                        setLocalFilters((prev: any) => ({
-                          ...prev,
-                          minPrice: range.min,
-                          maxPrice: range.max,
-                        }));
-                      }}
-                      className={`w-full text-left py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ✅ NEW: Ideal For Multi-Select */}
-            <div>
-              <h3 className="font-semibold text-sm text-navy dark:text-white mb-3 uppercase tracking-wider">
-                Ideal For
-              </h3>
-              <div className="grid grid-cols-1 gap-2">
-                {IDEAL_FOR_OPTIONS.map((option) => {
-                  const isSelected = (
-                    localFilters.idealFor || []
-                  ).includes(option.value);
-
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        const currentIdealFor = localFilters.idealFor || [];
-                        const newIdealFor = isSelected
-                          ? currentIdealFor.filter((v: string) => v !== option.value)
-                          : [...currentIdealFor, option.value];
-
-                        setLocalFilters((prev: any) => ({
-                          ...prev,
-                          idealFor: newIdealFor,
-                        }));
-                      }}
-                      className={`py-2.5 px-3 rounded-lg border-2 font-medium text-sm transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-gold bg-gold/10 text-gold dark:text-gold'
-                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-gold/50'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            </div>
-        
-
-          {/* Footer Actions */}
-          <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 space-y-3">
-            <button
-              onClick={handleApplyFilters}
-              disabled={isLoading}
-              className={`w-full py-3.5 bg-gold text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-gold/20 ${
-                isLoading
-                  ? 'opacity-60 cursor-not-allowed'
-                  : 'hover:bg-gold/90 active:scale-95'
-              }`}
+  /* ═══════════════════════════════════════════════════════════════════════════
+     FILTER CONTENT COMPONENT (shared between mobile & desktop)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  const FilterContent = useMemo(() => (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800/80 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4" style={{ color: "rgba(212,175,55,0.9)" }} />
+          <h2 className="text-base font-bold text-slate-800 dark:text-white tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+            Filters
+          </h2>
+          {activeCount > 0 && (
+            <span
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white"
+              style={{ background: "rgba(212,175,55,0.9)" }}
             >
-              {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Loading...
-                </span>
-              ) : (
-                <span>
-                  {resultCount > 0 ? `Show ${resultCount} properties` : 'Apply Filters'}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={handleClearAll}
-              disabled={isLoading}
-              className={`w-full py-3.5 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-semibold text-sm transition-all shadow-sm ${
-                isLoading
-                  ? 'opacity-60 cursor-not-allowed'
-                  : 'hover:bg-white dark:hover:bg-slate-800 hover:text-navy dark:hover:text-white hover:border-navy dark:hover:border-white'
-              }`}
-            >
-              Clear All
-            </button>
-          </div>
+              {activeCount}
+            </span>
+          )}
         </div>
+        {/* Close button only on mobile */}
+        {isMobile && (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Scrollable filter content */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 space-y-7">
+
+        {/* Location */}
+        <section>
+          <label htmlFor="filter-city" className={sectionLabel}>Location</label>
+          <div className="relative">
+            <select
+              id="filter-city"
+              value={local.city || ""}
+              onChange={(e) => set("city", e.target.value)}
+              className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5 pr-9 text-sm text-slate-700 dark:text-slate-200 outline-none transition focus:border-[rgba(212,175,55,0.6)] focus:ring-2 focus:ring-[rgba(212,175,55,0.15)] cursor-pointer"
+            >
+              <option value="">All Cities</option>
+              {cities.map((c) => (
+                <option key={c.id} value={normalizeCityValue(c.name)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        {/* Room Type */}
+        <section>
+          <span className={sectionLabel}>Room Type</span>
+          <div className="grid grid-cols-2 gap-2">
+            {ROOM_TYPE_OPTIONS.map((t) => {
+              const active = (local.roomTypes || []).includes(t.value) || local.roomType === t.value;
+              return (
+                <button key={t.value} onClick={() => toggleInArray("roomTypes", t.value)} className={filterBtn(active)}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Gender Preference */}
+        <section>
+          <span className={sectionLabel}>Gender Preference</span>
+          <div className="space-y-2">
+            {GENDER_PREFERENCE_UI_OPTIONS.map((g) => {
+              const active = local.genderPreference === g.value;
+              return (
+                <button
+                  key={g.value}
+                  onClick={() => set("genderPreference", active ? "" : g.value)}
+                  className={`w-full ${filterBtn(active)}`}
+                >
+                  {g.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Price Range */}
+        <section>
+          <span className={sectionLabel}>Price Range (₹)</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              placeholder="Min"
+              min={MIN_RENT} max={MAX_RENT} step={500}
+              value={local.minPrice ?? ""}
+              onChange={(e) => handlePrice("minPrice", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[rgba(212,175,55,0.6)] focus:ring-2 focus:ring-[rgba(212,175,55,0.15)] placeholder:text-slate-400 transition"
+            />
+            <span className="text-slate-400 font-light">–</span>
+            <input
+              type="number"
+              placeholder="Max"
+              min={MIN_RENT} max={MAX_RENT} step={500}
+              value={local.maxPrice ?? ""}
+              onChange={(e) => handlePrice("maxPrice", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[rgba(212,175,55,0.6)] focus:ring-2 focus:ring-[rgba(212,175,55,0.15)] placeholder:text-slate-400 transition"
+            />
+          </div>
+        </section>
+
+        {/* Budget Presets */}
+        <section>
+          <span className={sectionLabel}>Budget Presets</span>
+          <div className="space-y-2">
+            {BUDGET_RANGES.map((r) => {
+              const active = local.minPrice === r.min && local.maxPrice === r.max;
+              return (
+                <button
+                  key={r.label}
+                  onClick={() => setLocal((p: any) => ({ ...p, minPrice: r.min, maxPrice: r.max }))}
+                  className={`w-full ${filterBtn(active)}`}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Ideal For */}
+        <section>
+          <span className={sectionLabel}>Ideal For</span>
+          <div className="space-y-2">
+            {IDEAL_FOR_OPTIONS.map((o) => {
+              const active = (local.idealFor || []).includes(o.value);
+              return (
+                <button key={o.value} onClick={() => toggleInArray("idealFor", o.value)} className={`w-full ${filterBtn(active)}`}>
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+      </div>
+
+      {/* Footer actions */}
+      <div className="flex-shrink-0 px-5 py-4 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5 bg-white dark:bg-[#100e09]">
+        <button
+          onClick={applyFilters}
+          disabled={isLoading}
+          className="w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ background: "rgba(212,175,55,0.9)", boxShadow: "0 4px 20px rgba(212,175,55,0.25)" }}
+        >
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Applying…
+            </span>
+          ) : resultCount > 0 ? (
+            `Show ${resultCount} properties`
+          ) : (
+            "Apply Filters"
+          )}
+        </button>
+        <button
+          onClick={clearAll}
+          disabled={isLoading}
+          className="w-full py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-white disabled:opacity-60"
+        >
+          Clear All
+        </button>
+      </div>
+    </>
+  ), [local, activeCount, isMobile, isLoading, resultCount, cities, applyFilters, clearAll, set, toggleInArray, handlePrice, filterBtn, sectionLabel]);
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MOBILE VERSION: Portal-based full-screen overlay
+     ═══════════════════════════════════════════════════════════════════════════ */
+  const MobileDrawer = isMobile && isOpen ? createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+        aria-hidden
+      />
+      {/* Drawer */}
+      <aside
+        className="fixed inset-y-0 left-0 z-50 w-[min(300px,90vw)] flex flex-col bg-white dark:bg-[#100e09] border-r border-slate-200/70 dark:border-slate-800/60 shadow-2xl transition-transform duration-300 ease-in-out translate-x-0"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        {FilterContent}
       </aside>
-    </>;
+    </>,
+    document.body
+  ) : null;
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     DESKTOP VERSION: Inline sticky sidebar
+     
+     Note: Parent controls visibility with hidden lg:block wrapper
+     This component renders the sidebar when !isMobile
+     Parent controls WHERE and IF it's displayed
+     ═══════════════════════════════════════════════════════════════════════════ */
+  const DesktopSidebar = !isMobile ? (
+    <aside
+      /* ✅ CRITICAL FIX #4: Added h-full */
+      /* - h-full: Inherit 100% height from parent sidebar wrapper */
+      /* - Now FilterContent's flex-1 works properly on defined parent height */
+      /* - Result: Content fills sidebar, scrolls internally, buttons always visible */
+      className="h-full flex flex-col w-full rounded-2xl border border-slate-200/70 dark:border-slate-800/60 bg-white dark:bg-[#100e09]"
+    >
+      {FilterContent}
+    </aside>
+  ) : null;
+
+  return (
+    <>
+      {MobileDrawer}
+      {DesktopSidebar}
+    </>
+  );
 }
 
-/**
- * ✅ Memoized export
- * Prevents re-renders when parent re-renders but props are unchanged
- */
 export const FilterSidebar = memo(FilterSidebarComponent);

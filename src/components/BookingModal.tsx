@@ -82,12 +82,23 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
   useEffect(() => {
     if (!isOpen) return;
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // ✅ FIXED: Use HTML element instead of body to prevent layout shift
+    const htmlElement = document.documentElement;
+    const originalOverflow = htmlElement.style.overflow;
+    const originalPaddingRight = htmlElement.style.paddingRight;
+    
+    // Add scrollbar width padding to prevent layout jump
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    htmlElement.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      htmlElement.style.paddingRight = scrollbarWidth + 'px';
+    }
+    
     setIdempotencyKey(generateIdempotencyKey());
 
     return () => {
-      document.body.style.overflow = originalOverflow || '';
+      htmlElement.style.overflow = originalOverflow || '';
+      htmlElement.style.paddingRight = originalPaddingRight || '';
     };
   }, [isOpen]);
 
@@ -198,7 +209,7 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
     }
 
     if (!formData.date) {
-      newErrors.date = 'Preferred move-in date is required';
+      newErrors.date = 'Preferred Visit-in date is required';
     } else {
       const selected = new Date(`${formData.date}T00:00:00`);
       const today = new Date(`${getTodayLocalDate()}T00:00:00`);
@@ -385,7 +396,7 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
 
       <div
         ref={dialogRef}
-        className="relative flex max-h-[92vh] max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 sm:mx-4 sm:max-w-lg sm:rounded-2xl sm:zoom-in dark:bg-slate-800"
+        className="relative flex max-h-[92dvh] w-full mx-4 flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 sm:mx-0 sm:max-w-md sm:rounded-2xl sm:zoom-in md:max-w-lg dark:bg-slate-800"
       >
         {step === 'form' ? (
           <>
@@ -543,53 +554,65 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
                 </div>
 
                 {/* Email */}
-                <div>
-                  <label
-                    htmlFor="booking-email"
-                    className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
-                  >
-                    Email Address
-                    <span className="text-red-600 dark:text-red-400" aria-hidden="true">
-                      *
-                    </span>
-                    <span className="sr-only">(Required)</span>
-                  </label>
+               {/* Email */}
+<div>
+  <label
+    htmlFor="booking-email"
+    className="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200"
+  >
+    Email Address
+    <span className="text-red-600 dark:text-red-400" aria-hidden="true">
+      *
+    </span>
+    <span className="sr-only">(Required)</span>
+  </label>
 
-                  <div
-                    className={`relative flex w-full overflow-hidden rounded-lg border bg-white transition-all focus-within:ring-2 dark:bg-slate-700 ${
-                      errors.email
-                        ? 'border-red-400 focus-within:ring-red-400/50 dark:border-red-700'
-                        : 'border-slate-200 focus-within:ring-gold/40 dark:border-slate-600'
-                    }`}
-                  >
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      id="booking-email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      value={formData.email}
-                      onChange={(e) => updateField('email', e.target.value)}
-                      aria-invalid={!!errors.email}
-                      aria-describedby={errors.email ? 'booking-email-error' : undefined}
-                      placeholder="john@example.com"
-                      className="h-11 w-full bg-transparent pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
-                    />
-                  </div>
+  <div
+    className={`relative flex w-full overflow-hidden rounded-lg border bg-slate-100 dark:bg-slate-600/40 ${
+      errors.email
+        ? 'border-red-400 dark:border-red-700'
+        : 'border-slate-200 dark:border-slate-600'
+    }`}
+  >
+    {/* Icon */}
+    <Mail className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
-                  {errors.email && (
-                    <div
-                      id="booking-email-error"
-                      role="alert"
-                      className="mt-2 flex items-start gap-2"
-                    >
-                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
-                      <p className="text-xs font-medium text-red-600 dark:text-red-400">
-                        {errors.email}
-                      </p>
-                    </div>
-                  )}
-                </div>
+    {/* Input */}
+    <input
+      id="booking-email"
+      name="email"
+      type="email"
+      value={formData.email}
+      disabled
+      readOnly
+      aria-readonly="true"
+      className="h-11 w-full cursor-not-allowed bg-transparent pl-9 pr-10 text-sm text-slate-500 dark:text-slate-300 outline-none"
+    />
+
+    {/* Lock Indicator */}
+    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gold">
+      Locked
+    </span>
+  </div>
+
+  {/* Helper text */}
+  <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+    This email is linked to your account and cannot be changed.
+  </p>
+
+  {errors.email && (
+    <div
+      id="booking-email-error"
+      role="alert"
+      className="mt-2 flex items-start gap-2"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+      <p className="text-xs font-medium text-red-600 dark:text-red-400">
+        {errors.email}
+      </p>
+    </div>
+  )}
+</div>
 
                 {/* Date */}
                 <div>

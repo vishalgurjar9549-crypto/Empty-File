@@ -67,11 +67,24 @@ export interface TenantAssignment {
     phone: string | null;
   };
 }
+export interface AdminPaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages?: number;
+  hasNextPage?: boolean;
+  nextCursor?: string;
+}
+
 export interface AdminState {
   users: User[];
   properties: Room[];
   stats: AdminStats | null;
   recentActivity: ActivityLog[];
+  // ✅ NEW: Pagination metadata for properties (optional for backward compatibility)
+  propertiesMeta: AdminPaginationMeta | null;
+  // ✅ NEW: Pagination metadata for users (optional for backward compatibility)
+  usersMeta: AdminPaginationMeta | null;
   // Assignment State
   propertyAssignments: PropertyAssignment[];
   tenantAssignments: TenantAssignment[];
@@ -79,4 +92,6 @@ export interface AdminState {
   assignmentsError: string | null;
   loading: boolean;
   error: string | null;
+  usersRequestId: string | null;
+  propertiesRequestId: string | null;
 }

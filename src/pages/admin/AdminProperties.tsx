@@ -1,12 +1,14 @@
-import React, { useEffect, useState, lazy } from 'react';
+import React, { useCallback, useEffect, useRef, useState, lazy } from 'react';
 import { Search, MapPin, IndianRupee, Home, Clock, MessageCircle, TrendingUp, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchAllProperties, requestPropertyCorrection } from '../../store/slices/admin.slice';
 import { RequestCorrectionModal } from '../../components/admin/RequestCorrectionModal';
+import { StatusBadge } from '../../components/ui/StatusBadge';
 import { Room, FeedbackReason, FeedbackSeverity } from '../../types/api.types';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/admin.api';
 import { getRelativeTime, getTimeTooltip } from '../../utils/dateFormatting';
+import { buildPropertyWhatsappMessage, generateWhatsAppUrl, isValidWhatsAppPhone } from '../../utils/whatsappMessage';
 
 /**
  * PROMPT 2: Derive engagement status from timestamps
@@ -148,20 +150,144 @@ export function AdminProperties() {
   const navigate = useNavigate();
   const {
     properties,
+    propertiesMeta,
     loading
   } = useAppSelector((state) => state.admin);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(10);  const [sort, setSort] = useState<string>('createdAt_desc');  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [correctionProperty, setCorrectionProperty] = useState<Room | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingWhatsAppLinks, setPendingWhatsAppLinks] = useState<{ url: string; property: Room }[]>([]);
   const [currentWhatsAppIndex, setCurrentWhatsAppIndex] = useState<number>(0);
-  // PROMPT 3: Follow-up tracking
   const [followUpSelectedIds, setFollowUpSelectedIds] = useState<Set<string>>(new Set());
   const [showFollowUpConfirm, setShowFollowUpConfirm] = useState(false);
+  const activePropertiesRequestRef = useRef<{ abort: () => void } | null>(null);
+  const searchTermRef = useRef(searchTerm);
+
   useEffect(() => {
-    dispatch(fetchAllProperties());
-  }, [dispatch]);
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const nextSearchTerm = searchInput.trim();
+
+      if (nextSearchTerm !== searchTermRef.current) {
+        setCurrentPage(1);
+        setSearchTerm(nextSearchTerm);
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  const loadProperties = useCallback(() => {
+    activePropertiesRequestRef.current?.abort();
+
+    const request = dispatch(fetchAllProperties({
+      page: currentPage,
+      limit,
+      sort,
+      status: filterStatus !== 'all' ? filterStatus : undefined,
+      search: searchTerm || undefined
+    }));
+
+    activePropertiesRequestRef.current = request;
+    request.finally(() => {
+      if (activePropertiesRequestRef.current === request) {
+        activePropertiesRequestRef.current = null;
+      }
+    });
+
+    return request;
+  }, [currentPage, dispatch, filterStatus, limit, sort, searchTerm]);
+
+  useEffect(() => {
+    const request = loadProperties();
+
+    return () => {
+      request.abort();
+    };
+  }, [loadProperties]);
+
+  useEffect(() => {
+    return () => {
+      activePropertiesRequestRef.current?.abort();
+    };
+  }, []);
+
+  const handleFilterChange = (newStatus: string) => {
+    setFilterStatus(newStatus);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setCurrentPage(1);  // CRITICAL: Reset to page 1 to avoid out-of-range skip calculations
+  };
+
+  const handleSortChange = (newSort: string) => {
+    setSort(newSort);
+    setCurrentPage(1);  // Reset to page 1 when sort changes
+  };
+
+  /**
+   * Column-based sorting handler
+   * Maps column names to sort strings and handles toggle logic
+   * - Same column: toggle between asc/desc
+   * - New column: use default (createdAt→desc, price→asc)
+   */
+  const handleColumnSort = (columnKey: 'createdAt' | 'pricePerMonth') => {
+    let newSort: string;
+
+    if (columnKey === 'createdAt') {
+      // Toggle between createdAt_desc and createdAt_asc
+      newSort = sort === 'createdAt_desc' ? 'createdAt_asc' : 'createdAt_desc';
+    } else if (columnKey === 'pricePerMonth') {
+      // Toggle between price_asc and price_desc
+      newSort = sort === 'price_asc' ? 'price_desc' : 'price_asc';
+    } else {
+      return; // Safety: unknown column
+    }
+
+    handleSortChange(newSort);
+  };
+
+  /**
+   * Helper to determine if a column is currently sorted and in which direction
+   * Returns: 'asc' | 'desc' | null
+   */
+  const getColumnSortDirection = (columnKey: 'createdAt' | 'pricePerMonth'): 'asc' | 'desc' | null => {
+    if (columnKey === 'createdAt') {
+      if (sort === 'createdAt_asc') return 'asc';
+      if (sort === 'createdAt_desc') return 'desc';
+    } else if (columnKey === 'pricePerMonth') {
+      if (sort === 'price_asc') return 'asc';
+      if (sort === 'price_desc') return 'desc';
+    }
+    return null;
+  };
+
+  /**
+   * Render sort indicator for column headers
+   */
+  const SortIndicator = ({ column }: { column: 'createdAt' | 'pricePerMonth' }) => {
+    const direction = getColumnSortDirection(column);
+    if (direction === 'asc') {
+      return <span className="ml-2 text-navy dark:text-white opacity-100">↑</span>;
+    }
+    if (direction === 'desc') {
+      return <span className="ml-2 text-navy dark:text-white opacity-100">↓</span>;
+    }
+    return <span className="ml-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover/header:opacity-100 transition-opacity">⇅</span>;
+  };
+
   const handleRequestCorrection = (reason: FeedbackReason, message: string, severity?: FeedbackSeverity) => {
     if (correctionProperty) {
       dispatch(requestPropertyCorrection({
@@ -172,34 +298,49 @@ export function AdminProperties() {
       }));
     }
   };
-  const filteredProperties = properties.filter((property) => {
-    const status = property.reviewStatus || (property as any).status || 'approved';
-    const matchesStatus = filterStatus === 'all' || status === filterStatus;
-    const matchesSearch = property.title.toLowerCase().includes(searchTerm.toLowerCase()) || property.location.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesStatus && matchesSearch;
-  });
   const getStatusBadge = (property: Room) => {
-    const status = property.reviewStatus || (property as any).status || 'approved';
-    const styles = {
-      approved: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-      pending: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
-      rejected: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
-      suspended: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
-      needs_correction: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-      draft: 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-    };
-    const labels = {
-      approved: 'Approved',
-      pending: 'Pending Review',
-      rejected: 'Rejected',
-      suspended: 'Suspended',
-      needs_correction: 'Needs Correction',
-      draft: 'Draft'
-    };
-    return <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status as keyof typeof styles] || styles.suspended}`}>
+    const status = (property.reviewStatus || (property as any).status || 'APPROVED').toUpperCase();
+    const dotIcon = <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }}></span>;
 
-        {labels[status as keyof typeof labels] || status}
-      </span>;
+    switch (status) {
+      case "APPROVED":
+        return (
+          <StatusBadge variant="success" icon={dotIcon} size="sm">
+            Approved
+          </StatusBadge>
+        );
+      case "NEEDS_CORRECTION":
+        return (
+          <StatusBadge variant="warning" icon={dotIcon} animated size="sm">
+            Needs Correction
+          </StatusBadge>
+        );
+      case "REJECTED":
+        return (
+          <StatusBadge variant="error" icon={dotIcon} size="sm">
+            Rejected
+          </StatusBadge>
+        );
+      case "DRAFT":
+        return (
+          <StatusBadge variant="neutral" icon={dotIcon} size="sm">
+            Draft
+          </StatusBadge>
+        );
+      case "SUSPENDED":
+        return (
+          <StatusBadge variant="error" icon={dotIcon} size="sm">
+            Suspended
+          </StatusBadge>
+        );
+      case "PENDING":
+      default:
+        return (
+          <StatusBadge variant="pending" icon={dotIcon} animateIcon size="sm">
+            Pending Review
+          </StatusBadge>
+        );
+    }
   };
   const getTimeSinceFeedback = (createdAt: string) => {
     const now = new Date();
@@ -221,25 +362,19 @@ export function AdminProperties() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredProperties.map(p => p.id)));
+      setSelectedIds(new Set(properties.map(p => p.id)));
     } else {
       setSelectedIds(new Set());
     }
   };
 
-  const isValidPhone = (phone?: string) => {
-    if (!phone) return false;
-    const clean = phone.replace(/\D/g, '');
-    return clean.length === 10;
-  };
-
   const handleBulkWhatsApp = () => {
-    const selected = filteredProperties.filter(p =>
+    const selected = properties.filter(p =>
       selectedIds.has(p.id)
     );
 
     const valid = selected.filter(p =>
-      isValidPhone((p as any).owner?.phone)
+      isValidWhatsAppPhone((p as any).owner?.phone)
     );
 
     if (valid.length === 0) {
@@ -247,13 +382,14 @@ export function AdminProperties() {
       return;
     }
 
-    // Build queue of WhatsApp URLs
+    // Build queue of WhatsApp URLs using standardized utility
     const links = valid.map((property) => {
-      const phone = (property as any).owner?.phone?.replace(/\D/g, '').slice(-10);
-      const message = encodeURIComponent(
-        `Hi ${(property as any).owner?.name || 'Owner'},\n\nYour property "${property.title}" is listed on Homilivo.\n\nPlease login and update details:\nhttps://homilivo.com`
-      );
-      const url = `https://wa.me/91${phone}?text=${message}`;
+      const message = buildPropertyWhatsappMessage({
+        name: (property as any).owner?.name || 'Owner',
+        title: property.title,
+        propertyId: property.id,
+      });
+      const url = generateWhatsAppUrl((property as any).owner?.phone || '', message);
       return { url, property };
     });
 
@@ -322,8 +458,8 @@ export function AdminProperties() {
       }
     }
     
-    // Refresh properties to show updated tracking data
-    dispatch(fetchAllProperties());
+    // Refresh properties with the current page, filters, and debounced search
+    loadProperties();
     
     // Clear UI state
     setPendingWhatsAppLinks([]);
@@ -335,7 +471,7 @@ export function AdminProperties() {
    * PROMPT 3: Handle bulk follow-up WhatsApp with personalized messages
    */
   const handleFollowUpWhatsApp = () => {
-    const selected = filteredProperties.filter(p =>
+    const selected = properties.filter(p =>
       followUpSelectedIds.has(p.id)
     );
 
@@ -377,7 +513,7 @@ export function AdminProperties() {
    * PROMPT 3: Get properties that need follow-up
    */
   const getPropertiesNeedingFollowUp = () => {
-    return filteredProperties.filter(prop => {
+    return properties.filter(prop => {
       const followUp = getFollowUpStatus(prop as any);
       return followUp.status !== 'NONE';
     });
@@ -400,7 +536,7 @@ export function AdminProperties() {
           <div className="flex items-center gap-4 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Search properties..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-navy focus:ring-1 focus:ring-navy dark:text-white shadow-sm" />
+              <input type="text" placeholder="Search properties..." value={searchInput} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-navy focus:ring-1 focus:ring-navy dark:text-white shadow-sm" />
 
             </div>
           </div>
@@ -409,7 +545,7 @@ export function AdminProperties() {
         {/* Filters */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 mb-6 overflow-hidden">
           <div className="flex overflow-x-auto no-scrollbar">
-            {['all', 'pending', 'needs_correction', 'approved', 'rejected', 'suspended'].map((status) => <button key={status} onClick={() => setFilterStatus(status)} className={`px-6 py-4 font-medium text-sm capitalize whitespace-nowrap transition-colors border-b-2 ${filterStatus === status ? 'border-navy dark:border-white text-navy dark:text-white bg-slate-50 dark:bg-slate-700/50' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            {['all', 'pending', 'needs_correction', 'approved', 'rejected', 'suspended'].map((status) => <button key={status} onClick={() => handleFilterChange(status)} className={`px-6 py-4 font-medium text-sm capitalize whitespace-nowrap transition-colors border-b-2 ${filterStatus === status ? 'border-navy dark:border-white text-navy dark:text-white bg-slate-50 dark:bg-slate-700/50' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
 
                 {status === 'needs_correction' ? 'Needs Correction' : status}
               </button>)}
@@ -420,7 +556,7 @@ export function AdminProperties() {
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
           {loading ? <div className="p-12 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy dark:border-white mx-auto"></div>
-            </div> : filteredProperties.length > 0 ? <div className="overflow-x-auto">
+            </div> : properties.length > 0 ? <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[800px]">
                 <thead className="bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
                   <tr>
@@ -428,8 +564,8 @@ export function AdminProperties() {
                       <input
                         type="checkbox"
                         checked={
-                          filteredProperties.length > 0 &&
-                          selectedIds.size === filteredProperties.length
+                          properties.length > 0 &&
+                          selectedIds.size === properties.length
                         }
                         onChange={(e) => handleSelectAll(e.target.checked)}
                         className="w-4 h-4 rounded cursor-pointer"
@@ -437,8 +573,29 @@ export function AdminProperties() {
                     </th>
                     <th className="px-6 py-4 font-medium">Property</th>
                     <th className="px-6 py-4 font-medium">Location</th>
-                    <th className="px-6 py-4 font-medium">Price</th>
+                    {/* Sortable: Price */}
+                    <th 
+                      className="px-6 py-4 font-medium cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors group/header select-none"
+                      onClick={() => handleColumnSort('pricePerMonth')}
+                      title="Click to sort by price"
+                    >
+                      <div className="flex items-center">
+                        Price
+                        <SortIndicator column="pricePerMonth" />
+                      </div>
+                    </th>
                     <th className="px-6 py-4 font-medium">Status</th>
+                    {/* Sortable: Created At */}
+                    <th 
+                      className="px-6 py-4 font-medium cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors group/header select-none"
+                      onClick={() => handleColumnSort('createdAt')}
+                      title="Click to sort by creation date"
+                    >
+                      <div className="flex items-center">
+                        Created
+                        <SortIndicator column="createdAt" />
+                      </div>
+                    </th>
                     <th className="px-6 py-4 font-medium">Last Contacted</th>
                     <th className="px-6 py-4 font-medium">Attempts</th>
                     <th className="px-6 py-4 font-medium">Last Login</th>
@@ -451,7 +608,7 @@ export function AdminProperties() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {filteredProperties.map((property) => {
+                  {properties.map((property) => {
                 const status = property.reviewStatus || (property as any).status || 'approved';
                 const hasFeedback = property.adminFeedback;
                 return <tr key={property.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group">
@@ -505,6 +662,18 @@ export function AdminProperties() {
                             {hasFeedback && property.feedbackHistory && property.feedbackHistory.length > 1 && <span className="text-xs text-slate-500 dark:text-slate-400">
                                   {property.feedbackHistory.length} feedback(s)
                                 </span>}
+                          </div>
+                        </td>
+                        {/* Created Column */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                            <Clock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                            <span
+                              title={getTimeTooltip(property.createdAt)}
+                              className="text-sm font-medium text-navy dark:text-white"
+                            >
+                              {getRelativeTime(property.createdAt)}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -624,6 +793,82 @@ export function AdminProperties() {
             </div>}
         </div>
 
+        {/* Pagination Controls */}
+        {properties.length > 0 && (
+          <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              {/* Info and Rows Per Page Controls */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="text-sm text-slate-600 dark:text-slate-300">
+                  <span className="font-medium">
+                    {propertiesMeta && `Page ${propertiesMeta.page} of ${propertiesMeta.totalPages || 1}`}
+                  </span>
+                  {propertiesMeta && (
+                    <span className="text-slate-500 dark:text-slate-400 ml-4">
+                      Total: <span className="font-medium text-navy dark:text-white">{propertiesMeta.total}</span> properties
+                    </span>
+                  )}
+                </div>
+
+                {/* Rows Per Page Selector */}
+                <div className="flex items-center gap-2">
+                  <label htmlFor="limit-select" className="text-sm text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                    Rows per page:
+                  </label>
+                  <select
+                    id="limit-select"
+                    value={limit}
+                    onChange={(e) => handleLimitChange(Number(e.target.value))}
+                    disabled={loading}
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm outline-none transition focus:border-navy focus:ring-1 focus:ring-navy dark:focus:border-white dark:focus:ring-white cursor-pointer hover:border-slate-300 dark:hover:border-slate-600"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                {/* Sort Selector */}
+                <div className="flex items-center gap-2">
+                  <label htmlFor="sort-select" className="text-sm text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                    Sort by:
+                  </label>
+                  <select
+                    id="sort-select"
+                    value={sort}
+                    onChange={(e) => handleSortChange(e.target.value)}
+                    disabled={loading}
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm outline-none transition focus:border-navy focus:ring-1 focus:ring-navy dark:focus:border-white dark:focus:ring-white cursor-pointer hover:border-slate-300 dark:hover:border-slate-600"
+                  >
+                    <option value="createdAt_desc">Latest</option>
+                    <option value="createdAt_asc">Oldest</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || loading}
+                  className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={!propertiesMeta || currentPage >= (propertiesMeta.totalPages || 1) || loading}
+                  className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Bulk Actions Toolbar - Selection Mode */}
         {selectedIds.size > 0 && pendingWhatsAppLinks.length === 0 && (
           <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-6 py-4 flex justify-between items-center shadow-lg z-40">
@@ -731,7 +976,7 @@ export function AdminProperties() {
               </div>
 
               <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-                {filteredProperties.map(prop => {
+                {properties.map(prop => {
                   if (!followUpSelectedIds.has(prop.id)) return null;
                   const followUp = getFollowUpStatus(prop as any);
                   return (

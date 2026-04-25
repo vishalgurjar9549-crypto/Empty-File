@@ -132,8 +132,8 @@ export function PropertyRailSection() {
   }, [featured.rooms, featured.loading, featured.error]);
 
   return (
-    <section className="px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
-      <div className="max-w-[1600px] mx-auto">
+    <section className="py-12 md:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto">
         <div className="space-y-4 md:space-y-4">
           {groupedRails.map((section) => (
             <PropertyRail

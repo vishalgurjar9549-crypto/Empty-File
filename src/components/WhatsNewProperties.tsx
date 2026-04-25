@@ -129,7 +129,7 @@ export function WhatsNewProperties() {
   }
 
   return (
-    <section className="px-4 sm:py-4 lg:py-8 bg-white dark:bg-slate-950 transition-colors duration-300">
+    <section className="px-4 py-12 md:py-16 lg:py-20 bg-white dark:bg-slate-950 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="flex justify-between items-end mb-6 sm:mb-8 gap-4">

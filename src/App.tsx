@@ -15,6 +15,7 @@ import { getCurrentUser } from "./store/slices/auth.slice";
 import { hideToast } from "./store/slices/ui.slice";
 import { fetchFavorites, clearFavorites } from "./store/slices/favorites.slice";
 
+
 // ✅ CRITICAL ROUTES - Loaded eagerly
 import { Home } from "./pages/Home";
 import { RoomsListing } from "./pages/RoomsListing";
@@ -26,7 +27,7 @@ import { PhoneOtpModal } from "./components/PhoneOtpModal";
 
 // ✅ LAZY ROUTES - Loaded on demand
 const RoomDetails = lazy(() => import("./pages/RoomDetails").then(m => ({ default: m.RoomDetails })));
-const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
+const Dashboard = lazy(() => import("./pages/dashboard/Dashboard").then(m => ({ default: m.Dashboard })));
 const OwnerInfo = lazy(() => import("./pages/OwnerInfo").then(m => ({ default: m.OwnerInfo })));
 const About_Page = lazy(() => import("./pages/About").then(m => ({ default: m.About })));
 const Contact = lazy(() => import("./pages/Contact").then(m => ({ default: m.Contact })));
@@ -68,9 +69,17 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 
+// ✅ Pages where Navbar/Footer should NOT be shown
+const HIDE_LAYOUT_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/admin/login",
+];
+
 /**
  * ✅ Lazy Loading Fallback Component
- * Shows while lazy-loaded routes are being fetched
  */
 function LazyLoadingFallback() {
   return (
@@ -87,11 +96,9 @@ function LazyLoadingFallback() {
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
-
   return null;
 }
 
@@ -126,9 +133,16 @@ function AppContent() {
   const { token, authStatus } = useAppSelector((state) => state.auth);
   const { pathname } = useLocation();
 
-  useTheme();
+  const isStandalonePage = pathname.startsWith("/architecture");
 
-  // ✅ STEP 1: Initialize all global app data once
+  const shouldHideLayout = HIDE_LAYOUT_PATHS.some((path) =>
+    pathname.startsWith(path)
+  );
+
+  const showNavbar = !isStandalonePage && !shouldHideLayout;
+  const showFooter = !shouldHideLayout;
+
+  useTheme();
   useInitializeAppData();
 
   // Wake backend
@@ -136,15 +150,10 @@ function AppContent() {
     fetch(`${import.meta.env.VITE_API_URL}/health`).catch(() => {});
   }, []);
 
-  const isStandalonePage = pathname.startsWith("/architecture");
-
   useEffect(() => {
-    if (token) {
-      dispatch(getCurrentUser());
-    }
+    if (token) dispatch(getCurrentUser());
   }, [token, dispatch]);
 
-  // ✅ Fetch favorites after auth status changes
   useEffect(() => {
     if (authStatus === "AUTHENTICATED") {
       dispatch(fetchFavorites());
@@ -153,7 +162,6 @@ function AppContent() {
     }
   }, [authStatus, dispatch]);
 
-  // Mobile deep link handling
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -178,9 +186,23 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-cream dark:bg-slate-950 transition-colors duration-300">
-      {!isStandalonePage && <Navbar />}
+    <div className="flex flex-col min-h-screen bg-cream dark:bg-slate-950 transition-colors duration-300">
 
+      {/* ✅ Sticky Navbar - in document flow, no pt-16 needed */}
+      {/* {showNavbar && (
+        <header className="sticky top-0 z-50 border-b bg-cream/80 dark:bg-slate-950/80 backdrop-blur">
+          <Navbar />
+        </header>
+      )} */}
+      {showNavbar && (
+  <header className="sticky top-0 z-50 h-16 border-b bg-cream/80 dark:bg-slate-950/80 backdrop-blur">
+    <div className="h-full">
+      <Navbar />
+    </div>
+  </header>
+)}
+
+      {/* ✅ Global UI Overlays */}
       {toast && (
         <Toast
           message={toast.message}
@@ -188,160 +210,198 @@ function AppContent() {
           onClose={() => dispatch(hideToast())}
         />
       )}
-
       <PhoneOtpModal />
 
-   <main
-  className={`min-h-screen flex flex-col ${
-    !isStandalonePage ? 'pt-20'  : ''
-  }`}
->
-  {/* Content wrapper */}
-  <div className="flex-1">
-    {/* Global container */}
-    <div className="">
-      <Routes>
-              {/* ✅ CRITICAL ROUTES - No lazy loading */}
-              <Route path="/" element={<Home />} />
-              <Route path="/rooms" element={<RoomsListing />} />
-              <Route path="/auth/login" element={<Login />} />
-              <Route path="/auth/register" element={<Register />} />
+      {/* ✅ Main Content - starts right after header, no padding needed */}
+      <main className="flex-1 flex flex-col">
+        <Routes>
+          {/* ✅ CRITICAL ROUTES */}
+          <Route path="/" element={<Home />} />
+          <Route path="/rooms" element={<RoomsListing />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Register />} />
 
               {/* ✅ LAZY ROUTES - Loaded on demand with Suspense */}
               <Route path="/rooms/:id" element={<Suspense fallback={<LazyLoadingFallback />}><RoomDetails /></Suspense>} />
+              <Route path="/property/:id" element={<Suspense fallback={<LazyLoadingFallback />}><RoomDetails /></Suspense>} />
               <Route path="/owners" element={<Suspense fallback={<LazyLoadingFallback />}><OwnerInfo /></Suspense>} />
               <Route path="/pricing" element={<Suspense fallback={<LazyLoadingFallback />}><Pricing /></Suspense>} />
 
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <Dashboard />
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
+          <Route path="/owners" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <OwnerInfo />
+            </Suspense>
+          } />
 
-              <Route
-                path="/owner/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <Dashboard />
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
+          <Route path="/pricing" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <Pricing />
+            </Suspense>
+          } />
 
-              <Route path="/profile" element={<Suspense fallback={<LazyLoadingFallback />}><Profile /></Suspense>} />
-              <Route path="/auth/forgot-password" element={<Suspense fallback={<LazyLoadingFallback />}><ForgotPassword /></Suspense>} />
-              <Route path="/auth/reset-password" element={<Suspense fallback={<LazyLoadingFallback />}><ResetPassword /></Suspense>} />
-              <Route path="/admin/login" element={<Suspense fallback={<LazyLoadingFallback />}><AdminLogin /></Suspense>} />
-              <Route path="/auth/google/callback" element={<Suspense fallback={<LazyLoadingFallback />}><GoogleCallback /></Suspense>} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <Dashboard />
+              </Suspense>
+            </ProtectedRoute>
+          } />
 
-              <Route path="/about" element={<Suspense fallback={<LazyLoadingFallback />}><About_Page /></Suspense>} />
-              <Route path="/contact" element={<Suspense fallback={<LazyLoadingFallback />}><Contact /></Suspense>} />
-              <Route path="/privacy-policy" element={<Suspense fallback={<LazyLoadingFallback />}><PrivacyPolicy /></Suspense>} />
-              <Route path="/terms-and-conditions" element={<Suspense fallback={<LazyLoadingFallback />}><TermsConditions /></Suspense>} />
-              <Route path="/refund-policy" element={<Suspense fallback={<LazyLoadingFallback />}><RefundPolicy /></Suspense>} />
+          <Route path="/owner/dashboard" element={
+            <ProtectedRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <Dashboard />
+              </Suspense>
+            </ProtectedRoute>
+          } />
 
-              {/* Architecture */}
-              <Route path="/architecture/idempotency" element={<Suspense fallback={<LazyLoadingFallback />}><IdempotencyArchitecture /></Suspense>} />
-              <Route path="/architecture/outbox" element={<Suspense fallback={<LazyLoadingFallback />}><OutboxArchitecture /></Suspense>} />
+          <Route path="/profile" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <Profile />
+            </Suspense>
+          } />
 
-              {/* Admin */}
-              <Route
-                path="/admin"
-                element={
-                  <AdminRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AdminDashboard />
-                    </Suspense>
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/admin/properties"
-                element={
-                  <AdminRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AdminProperties />
-                    </Suspense>
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/admin/properties/:id"
-                element={
-                  <AdminRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AdminPropertyDetail />
-                    </Suspense>
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/admin/users"
-                element={
-                  <AdminRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AdminUsers />
-                    </Suspense>
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/admin/agent-assignments"
-                element={
-                  <AdminRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AdminAgentAssignments />
-                    </Suspense>
-                  </AdminRoute>
-                }
-              />
+          <Route path="/auth/forgot-password" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <ForgotPassword />
+            </Suspense>
+          } />
 
-              {/* Agent */}
-              <Route
-                path="/agent/dashboard"
-                element={
-                  <AgentRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <AgentDashboard />
-                    </Suspense>
-                  </AgentRoute>
-                }
-              />
+          <Route path="/auth/reset-password" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <ResetPassword />
+            </Suspense>
+          } />
 
-              {/* Tenant */}
-              <Route
-                path="/tenant/dashboard"
-                element={
-                  <TenantRoute>
-                    <Suspense fallback={<LazyLoadingFallback />}>
-                      <TenantDashboard />
-                    </Suspense>
-                  </TenantRoute>
-                }
-              />
-            </Routes>
-          </div>
-        </div>
+          <Route path="/admin/login" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <AdminLogin />
+            </Suspense>
+          } />
 
-        <Footer />
+          <Route path="/auth/google/callback" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <GoogleCallback />
+            </Suspense>
+          } />
+
+          <Route path="/about" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <About_Page />
+            </Suspense>
+          } />
+
+          <Route path="/contact" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <Contact />
+            </Suspense>
+          } />
+
+          <Route path="/privacy-policy" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <PrivacyPolicy />
+            </Suspense>
+          } />
+
+          <Route path="/terms-and-conditions" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <TermsConditions />
+            </Suspense>
+          } />
+
+          <Route path="/refund-policy" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <RefundPolicy />
+            </Suspense>
+          } />
+
+          {/* ✅ Architecture */}
+          <Route path="/architecture/idempotency" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <IdempotencyArchitecture />
+            </Suspense>
+          } />
+
+          <Route path="/architecture/outbox" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <OutboxArchitecture />
+            </Suspense>
+          } />
+
+          {/* ✅ Admin */}
+          <Route path="/admin" element={
+            <AdminRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AdminDashboard />
+              </Suspense>
+            </AdminRoute>
+          } />
+
+          <Route path="/admin/properties" element={
+            <AdminRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AdminProperties />
+              </Suspense>
+            </AdminRoute>
+          } />
+
+          <Route path="/admin/properties/:id" element={
+            <AdminRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AdminPropertyDetail />
+              </Suspense>
+            </AdminRoute>
+          } />
+
+          <Route path="/admin/users" element={
+            <AdminRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AdminUsers />
+              </Suspense>
+            </AdminRoute>
+          } />
+
+          <Route path="/admin/agent-assignments" element={
+            <AdminRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AdminAgentAssignments />
+              </Suspense>
+            </AdminRoute>
+          } />
+
+          {/* ✅ Agent */}
+          <Route path="/agent/dashboard" element={
+            <AgentRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AgentDashboard />
+              </Suspense>
+            </AgentRoute>
+          } />
+
+          {/* ✅ Tenant */}
+          <Route path="/tenant/dashboard" element={
+            <TenantRoute>
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <TenantDashboard />
+              </Suspense>
+            </TenantRoute>
+          } />
+        </Routes>
       </main>
+
+      {/* ✅ Footer - outside <main>, always at bottom of flex column */}
+      {showFooter && <Footer />}
+
     </div>
   );
 }
 
 export function App() {
-  // Create a client for React Query with optimized defaults
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 1000 * 60 * 5, // 5 minutes
-        gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+        staleTime: 1000 * 60 * 5,
+        gcTime: 1000 * 60 * 10,
         retry: 1,
         refetchOnWindowFocus: false,
       },
@@ -354,6 +414,7 @@ export function App() {
         <BrowserRouter>
           <ScrollToTop />
           <AppContent />
+         
         </BrowserRouter>
       </Provider>
     </QueryClientProvider>
