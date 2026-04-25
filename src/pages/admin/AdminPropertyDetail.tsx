@@ -9,6 +9,7 @@ import { EditPropertyModal } from '../../components/EditPropertyModal';
 import { PropertyStatus } from '../../types/admin.types';
 import { FeedbackReason, FeedbackSeverity } from '../../types/api.types';
 import { Button } from '../../components/ui/Button';
+import { buildPropertyWhatsappMessage, generateWhatsAppUrl, isValidWhatsAppPhone } from '../../utils/whatsappMessage';
 // ─── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLES: Record<string, string> = {
   approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800',
@@ -63,18 +64,6 @@ function SectionHeading({
       <h3 className="font-bold text-navy dark:text-white text-base">{title}</h3>
     </div>;
 }
-// ─── WhatsApp Helper Functions ─────────────────────────────────────────────────
-const isValidPhone = (phone?: string) => {
-  if (!phone) return false;
-  const clean = phone.replace(/\D/g, "");
-  return clean.length === 10;
-};
-
-const buildWhatsAppMessage = (ownerName?: string, propertyTitle?: string) => {
-  const name = ownerName || "Owner";
-  const title = propertyTitle || "your property";
-  return `Hi ${name},\n\nYour property "${title}" is now listed on Homilivo.\n\nPlease login using your phone and update/correct details if needed:\nhttps://homilivo.com`;
-};
 // ─── Main component ────────────────────────────────────────────────────────────
 export function AdminPropertyDetail() {
   const {
@@ -176,11 +165,14 @@ export function AdminPropertyDetail() {
     }
   };
   const handleWhatsApp = () => {
-    if (!owner?.phone) return;
-    const cleanPhone = owner.phone.replace(/\D/g, "").slice(-10);
-    const message = encodeURIComponent(buildWhatsAppMessage(owner.name, property.title));
-    const url = `https://wa.me/91${cleanPhone}?text=${message}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!owner?.phone || !isValidWhatsAppPhone(owner.phone)) return;
+    const message = buildPropertyWhatsappMessage({
+      name: owner.name || 'Owner',
+      title: property.title,
+      propertyId: property.id,
+    });
+    const url = generateWhatsAppUrl(owner.phone, message);
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
   const currentStatus = property.reviewStatus || (property as any).status || 'pending';
   const allImages = property.images ?? [];
@@ -205,7 +197,7 @@ export function AdminPropertyDetail() {
                   Properties
                 </span>
                 <span>/</span>
-                <span className="text-navy dark:text-white truncate max-w-[160px]">
+                <span className="text-navy dark:text-white truncate max-w-[120px] sm:max-w-[160px] min-w-0">
                   {property.title}
                 </span>
               </div>
@@ -225,7 +217,7 @@ export function AdminPropertyDetail() {
         </div>
 
         {/* ── Main grid ───────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
           {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
             {/* Image Gallery */}
@@ -418,7 +410,7 @@ export function AdminPropertyDetail() {
                     <Edit className="w-4 h-4 mr-2" />
                     Edit Property
                   </Button>
-                {isValidPhone(owner?.phone) && <Button fullWidth size="sm" className="!bg-green-600 hover:!bg-green-700 !text-white border-none justify-start" onClick={handleWhatsApp}>
+                {isValidWhatsAppPhone(owner?.phone) && <Button fullWidth size="sm" className="!bg-green-600 hover:!bg-green-700 !text-white border-none justify-start" onClick={handleWhatsApp}>
 
                     <MessageCircle className="w-4 h-4 mr-2" />
                     Send WhatsApp

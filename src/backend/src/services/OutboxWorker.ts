@@ -371,7 +371,7 @@ async function handleBookingCreated(payload: BookingCreatedPayload, outboxEventI
     recipientId: payload.ownerId,
     type: 'BOOKING_CREATED' as any,
     title: 'New Booking Request',
-    message: `${payload.tenantName} has requested to book "${payload.roomTitle}" in ${payload.roomCity} with move-in date ${new Date(payload.moveInDate).toLocaleDateString()}.`,
+    message: `${payload.tenantName} has requested to book "${payload.roomTitle}" in ${payload.roomCity} with Visit-in date ${new Date(payload.moveInDate).toLocaleDateString()}.`,
     payload: {
       triggeredBy: payload.tenantId || undefined,
       triggeredByName: payload.tenantName,

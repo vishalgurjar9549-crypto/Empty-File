@@ -70,7 +70,7 @@ export const CreateBookingSchema = z.object({
     today.setHours(0, 0, 0, 0);
     return date >= today;
   }, {
-    message: 'Move-in date must be today or in the future'
+    message: 'Visit-in date must be today or in the future'
   }),
   message: z.string().trim().max(500, 'Message must be at most 500 characters').optional().nullable()
 });

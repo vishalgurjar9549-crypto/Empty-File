@@ -18,6 +18,7 @@ import tenantDashboardReducer from './slices/tenantDashboard.slice';
 import otpReducer from './slices/otp.slice';
 import reviewsReducer from './slices/reviews.slice';
 import favoritesReducer from './slices/favorites.slice';
+import notificationsReducer from './slices/notifications.slice';
 // ✅ NEW: Import isolated home sections reducer
 import homeSectionsReducer from './slices/homeSections.slice';
 // ✅ NEW: Import stats reducer for global platform stats
@@ -38,6 +39,7 @@ export const store = configureStore({
     otp: otpReducer,
     reviews: reviewsReducer,
     favorites: favoritesReducer,
+    notifications: notificationsReducer,
     // ✅ NEW: Add isolated home sections state
     homeSections: homeSectionsReducer,
     // ✅ NEW: Add platform stats state

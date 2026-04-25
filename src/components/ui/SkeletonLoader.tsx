@@ -83,7 +83,7 @@ export function WhatsNewCardSkeleton() {
 export function PropertyRailSkeletonLoader() {
   return (
     <section className="px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
-      <div className="max-w-[1600px] mx-auto space-y-4">
+      <div className="max-w-7xl mx-auto space-y-4">
         {/* Section Header Skeleton */}
         <div className="mb-6 animate-pulse">
           <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-2" />

@@ -29,7 +29,7 @@ const projects: Project[] = [{
   image: 'https://images.unsplash.com/photo-1506097425191-7ad538b29cef?q=80&w=2070&auto=format&fit=crop'
 }];
 export function WorkGrid() {
-  return <section className="py-24 lg:py-32 px-8 lg:px-16 max-w-6xl mx-auto">
+  return <section className="py-24 lg:py-32 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
       <motion.div initial={{
       opacity: 0,
       y: 20

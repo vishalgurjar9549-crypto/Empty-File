@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/og/:path*", "destination": "https://api.homilivo.com/og/:path*" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }

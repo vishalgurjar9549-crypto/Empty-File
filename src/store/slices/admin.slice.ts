@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { AdminState, PropertyStatus, UserStatus, RequestCorrectionInput } from '../../types/admin.types';
-import { User, Room, FeedbackReason, FeedbackSeverity } from '../../types/api.types';
+import { AdminState, PropertyStatus, UserStatus, RequestCorrectionInput, AdminPaginationMeta } from '../../types/admin.types';
+import { User, Room, FeedbackReason, FeedbackSeverity, PaginationMeta } from '../../types/api.types';
 import { showToast } from './ui.slice';
 import { adminApi } from '../../api/admin.api';
 const initialState: AdminState = {
@@ -8,13 +8,18 @@ const initialState: AdminState = {
   properties: [],
   stats: null,
   recentActivity: [],
+  // ✅ NEW: Pagination metadata (null until paginated response received)
+  propertiesMeta: null,
+  usersMeta: null,
   loading: false,
   error: null,
   // Assignment State
   propertyAssignments: [],
   tenantAssignments: [],
   assignmentsLoading: false,
-  assignmentsError: null
+  assignmentsError: null,
+  usersRequestId: null,
+  propertiesRequestId: null
 };
 
 // Async Thunks - REPLACED WITH REAL API CALLS
@@ -38,14 +43,24 @@ export const fetchAllUsers = createAsyncThunk('admin/fetchUsers', async (filters
   role?: string;
   status?: string;
   search?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+  cursor?: string;
 } = {}, {
   dispatch,
-  rejectWithValue
+  rejectWithValue,
+  signal
 }) => {
   try {
-    const users = await adminApi.getAllUsers(filters);
-    return users;
+    const response = await adminApi.getAllUsers(filters, signal);
+    // ✅ Return both data and meta
+    return response;
   } catch (error: any) {
+    if (signal.aborted || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+      throw error;
+    }
+
     const message = error.response?.data?.message || 'Failed to fetch users';
     dispatch(showToast({
       message,
@@ -57,14 +72,24 @@ export const fetchAllUsers = createAsyncThunk('admin/fetchUsers', async (filters
 export const fetchAllProperties = createAsyncThunk('admin/fetchProperties', async (filters: {
   status?: string;
   search?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+  cursor?: string;
 } = {}, {
   dispatch,
-  rejectWithValue
+  rejectWithValue,
+  signal
 }) => {
   try {
-    const properties = await adminApi.getAllProperties(filters);
-    return properties;
+    const response = await adminApi.getAllProperties(filters, signal);
+    // ✅ Return both data and meta
+    return response;
   } catch (error: any) {
+    if (signal.aborted || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+      throw error;
+    }
+
     const message = error.response?.data?.message || 'Failed to fetch properties';
     dispatch(showToast({
       message,
@@ -377,27 +402,49 @@ const adminSlice = createSlice({
     });
 
     // Users
-    builder.addCase(fetchAllUsers.pending, (state) => {
+    builder.addCase(fetchAllUsers.pending, (state, action) => {
       state.loading = true;
       state.error = null;
+      state.usersRequestId = action.meta.requestId;
     }).addCase(fetchAllUsers.fulfilled, (state, action) => {
+      if (state.usersRequestId !== action.meta.requestId) return;
+
       state.loading = false;
-      state.users = action.payload;
+      state.usersRequestId = null;
+      // ✅ Extract data and meta from paginated response
+      state.users = action.payload.users;
+      state.usersMeta = action.payload.meta;
     }).addCase(fetchAllUsers.rejected, (state, action) => {
+      if (state.usersRequestId !== action.meta.requestId) return;
+
       state.loading = false;
-      state.error = action.payload as string;
+      state.usersRequestId = null;
+      if (!action.meta.aborted) {
+        state.error = action.payload as string;
+      }
     });
 
     // Properties
-    builder.addCase(fetchAllProperties.pending, (state) => {
+    builder.addCase(fetchAllProperties.pending, (state, action) => {
       state.loading = true;
       state.error = null;
+      state.propertiesRequestId = action.meta.requestId;
     }).addCase(fetchAllProperties.fulfilled, (state, action) => {
+      if (state.propertiesRequestId !== action.meta.requestId) return;
+
       state.loading = false;
-      state.properties = action.payload;
+      state.propertiesRequestId = null;
+      // ✅ Extract data and meta from paginated response
+      state.properties = action.payload.properties;
+      state.propertiesMeta = action.payload.meta;
     }).addCase(fetchAllProperties.rejected, (state, action) => {
+      if (state.propertiesRequestId !== action.meta.requestId) return;
+
       state.loading = false;
-      state.error = action.payload as string;
+      state.propertiesRequestId = null;
+      if (!action.meta.aborted) {
+        state.error = action.payload as string;
+      }
     });
 
     // Update Property

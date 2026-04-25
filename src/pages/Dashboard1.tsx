@@ -48,6 +48,7 @@ import { Link } from "react-router-dom";
 import { ResubmitReviewWarningModal } from "../components/ResubmitReviewWarningModal";
 import { EmailVerificationModal } from "../components/auth/EmailVerificationModal";
 import { GridSkeleton, ListItemSkeleton } from "../components/ui/Skeletons";
+import { StatusBadge } from "../components/ui/StatusBadge";
 import { showToast } from "../store/slices/ui.slice";
 import { updateUser, getCurrentUser } from "../store/slices/auth.slice";
 import { ownerApi } from "../api/owner.api";
@@ -963,48 +964,45 @@ export function Dashboard() {
 
   const getStatusBadge = (room: Room) => {
     const status = (room.reviewStatus ?? "PENDING").toUpperCase();
+    const dotIcon = <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }}></span>;
+
     switch (status) {
       case "APPROVED":
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <StatusBadge variant="success" icon={dotIcon}>
             Approved
-          </span>
+          </StatusBadge>
         );
       case "NEEDS_CORRECTION":
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+          <StatusBadge variant="warning" icon={dotIcon} animated>
             Needs Correction
-          </span>
+          </StatusBadge>
         );
       case "REJECTED":
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          <StatusBadge variant="error" icon={dotIcon}>
             Rejected
-          </span>
+          </StatusBadge>
         );
       case "DRAFT":
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Draft
-          </span>
+          <StatusBadge variant="neutral" icon={dotIcon}>
+            Draft
+          </StatusBadge>
         );
       case "SUSPENDED":
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          <StatusBadge variant="error" icon={dotIcon}>
             Suspended
-          </span>
+          </StatusBadge>
         );
       case "PENDING":
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+          <StatusBadge variant="pending" icon={dotIcon} animateIcon>
             Under Review
-          </span>
+          </StatusBadge>
         );
     }
   };
@@ -1103,132 +1101,134 @@ export function Dashboard() {
       />
 
       {/* Feedback Modal */}
-      {viewingFeedback && viewingFeedback.adminFeedback && (
-        <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl shadow-navy/20 dark:shadow-black/40 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-300">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-lg">
-                    <MessageSquare className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white font-playfair">
-                      Admin Feedback
-                    </h3>
-                    <p className="text-orange-100 text-sm mt-0.5 truncate max-w-[260px]">
-                      {viewingFeedback.title}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setViewingFeedback(null)}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-white" />
-                </button>
-              </div>
+     {viewingFeedback && viewingFeedback.adminFeedback && (
+  <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
+    {/* Backdrop */}
+    <div
+      className="absolute inset-0 bg-navy/60 backdrop-blur-sm"
+      onClick={() => setViewingFeedback(null)}
+    />
+
+    {/* Modal */}
+    <div className="relative z-[91] bg-white dark:bg-slate-800 rounded-2xl max-w-sm sm:max-w-lg w-full mx-4 sm:mx-0 shadow-2xl shadow-navy/20 dark:shadow-black/40 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-300">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg">
+              <MessageSquare className="w-5 h-5 text-white" />
             </div>
-
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${
-                    viewingFeedback.adminFeedback.severity === "major"
-                      ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-                      : "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                  }`}
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  {viewingFeedback.adminFeedback.reasonLabel}
-                </div>
-                {viewingFeedback.adminFeedback.severity && (
-                  <span
-                    className={`text-xs font-medium px-2 py-1 rounded-md ${
-                      viewingFeedback.adminFeedback.severity === "major"
-                        ? "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
-                        : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                    }`}
-                  >
-                    {viewingFeedback.adminFeedback.severity} issue
-                  </span>
-                )}
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border-l-4 border-orange-400">
-                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
-                  Admin Message
-                </p>
-                <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
-                  {viewingFeedback.adminFeedback.message}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  {new Date(
-                    viewingFeedback.adminFeedback.createdAt,
-                  ).toLocaleString()}
-                </div>
-                {viewingFeedback.adminFeedback.adminName && (
-                  <span>by {viewingFeedback.adminFeedback.adminName}</span>
-                )}
-              </div>
-
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4">
-                <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-2.5">
-                  Next Steps
-                </p>
-                <ul className="space-y-1.5">
-                  {[
-                    "Review the feedback carefully",
-                    "Edit your property to fix the issues",
-                    "Resubmit for review when ready",
-                  ].map((step, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                      {step}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="px-5 pb-5 flex gap-3 shrink-0">
-              <button
-                onClick={() => {
-                  setViewingFeedback(null);
-                  setEditingRoom(viewingFeedback);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
-              >
-                <Edit className="w-4 h-4" />
-                Edit Property
-              </button>
-              {/* <button
-                onClick={() => handleResubmit(viewingFeedback.id)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-navy dark:bg-white text-white dark:text-navy font-semibold rounded-xl hover:bg-navy/90 dark:hover:bg-slate-100 transition-colors text-sm shadow-lg shadow-navy/20"
-              >
-                <Send className="w-4 h-4" />
-                Resubmit for Review
-              </button> */}
-              <button
-                onClick={() => openResubmitModal(viewingFeedback)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-navy dark:bg-white text-white dark:text-navy font-semibold rounded-xl hover:bg-navy/90 dark:hover:bg-slate-100 transition-colors text-sm shadow-lg shadow-navy/20"
-              >
-                <Send className="w-4 h-4" />
-                Resubmit for Review
-              </button>
+            <div>
+              <h3 className="text-lg font-bold text-white font-playfair">
+                Admin Feedback
+              </h3>
+              <p className="text-orange-100 text-sm mt-0.5 truncate max-w-[260px]">
+                {viewingFeedback.title}
+              </p>
             </div>
           </div>
-        </div>
-      )}
 
+          <button
+            onClick={() => setViewingFeedback(null)}
+            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${
+              viewingFeedback.adminFeedback.severity === "major"
+                ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+                : "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+            }`}
+          >
+            <AlertCircle className="w-4 h-4" />
+            {viewingFeedback.adminFeedback.reasonLabel}
+          </div>
+
+          {viewingFeedback.adminFeedback.severity && (
+            <span
+              className={`text-xs font-medium px-2 py-1 rounded-md ${
+                viewingFeedback.adminFeedback.severity === "major"
+                  ? "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                  : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              {viewingFeedback.adminFeedback.severity} issue
+            </span>
+          )}
+        </div>
+
+        <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border-l-4 border-orange-400">
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+            Admin Message
+          </p>
+          <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
+            {viewingFeedback.adminFeedback.message}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            {new Date(viewingFeedback.adminFeedback.createdAt).toLocaleString()}
+          </div>
+          {viewingFeedback.adminFeedback.adminName && (
+            <span>by {viewingFeedback.adminFeedback.adminName}</span>
+          )}
+        </div>
+
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4">
+          <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-2.5">
+            Next Steps
+          </p>
+          <ul className="space-y-1.5">
+            {[
+              "Review the feedback carefully",
+              "Edit your property to fix the issues",
+              "Resubmit for review when ready",
+            ].map((step, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                {step}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 pb-5 flex gap-3 shrink-0">
+        <button
+          onClick={() => {
+            setViewingFeedback(null);
+            setEditingRoom(viewingFeedback);
+          }}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
+        >
+          <Edit className="w-4 h-4" />
+          Edit Property
+        </button>
+
+        <button
+          onClick={() => openResubmitModal(viewingFeedback)}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-navy dark:bg-white text-white dark:text-navy font-semibold rounded-xl hover:bg-navy/90 dark:hover:bg-slate-100 transition-colors text-sm shadow-lg shadow-navy/20"
+        >
+          <Send className="w-4 h-4" />
+          Resubmit for Review
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       {/* <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-1"> */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-6  md:pb-8">
         {/* <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"> */}
@@ -1269,7 +1269,7 @@ export function Dashboard() {
               </button>
 
               {isNotificationsOpen && (
-                <div className="absolute right-0 mt-3 w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl z-30 overflow-hidden">
+                <div className="absolute right-0 mt-3 w-[calc(100vw-1.5rem)] sm:w-[280px] md:w-[320px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl z-30 overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -1401,63 +1401,6 @@ export function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* Stats Grid */}
-        {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-10">
-          <button onClick={() => setActiveTab('properties')} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-left hover:shadow-md hover:border-navy/20 dark:hover:border-slate-500 hover:-translate-y-0.5 transition-all duration-200 group">
-
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
-                <BarChart3 className="w-5 h-5" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-navy dark:group-hover:text-white transition-colors" />
-            </div>
-            <p className="text-2xl font-bold text-navy dark:text-white mb-1">
-              {summary?.totalRooms || 0}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-              Total Properties
-            </p>
-          </button>
-
-          <button onClick={() => setActiveTab('bookings')} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-left hover:shadow-md hover:border-navy/20 dark:hover:border-slate-500 hover:-translate-y-0.5 transition-all duration-200 group">
-
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
-                <Users className="w-5 h-5" />
-              </div>
-              <div className="flex items-center gap-2">
-                {myBookings.filter((b) => b.status === 'pending').length > 0 && <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
-                    {myBookings.filter((b) => b.status === 'pending').length}{' '}
-                    new
-                  </span>}
-                <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-navy dark:group-hover:text-white transition-colors" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-navy dark:text-white mb-1">
-              {summary?.totalLeads || 0}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-              Total Leads
-            </p>
-          </button>
-
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gold/10 dark:bg-gold/20 text-gold rounded-xl">
-                <IndianRupee className="w-5 h-5" />
-              </div>
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-2xl font-bold text-navy dark:text-white mb-1">
-              ₹{(summary?.totalEarnings || 0).toLocaleString()}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-              Total Earnings
-            </p>
-          </div>
-        </div> */}
-        {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-3 md:gap-5 mb-6">
           <button
             onClick={() => setActiveTab("properties")}

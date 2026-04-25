@@ -108,7 +108,7 @@ export function Home() {
       {/* ============================== */}
       {/* STEP 5: Trust Signal */}
       {/* ============================== */}
-      <section className="relative py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
+      <section className="relative py-12 md:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-7xl mx-auto">
           {/* Trust Signal Text */}
           <div className="flex items-center justify-center gap-2 mb-8 text-center">

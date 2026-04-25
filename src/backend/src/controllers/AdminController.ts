@@ -88,15 +88,31 @@ export class AdminController {
 
   /**
    * GET /api/admin/users
-   * Get all users with optional filters
+   * Get all users with optional filters and pagination
+   * Query params: role, status, search, page (default: 1), limit (default: 10, max: 50), sort (default: createdAt_desc)
    */
   async getAllUsers(req: Request, res: Response) {
     try {
       const {
         role,
         status,
-        search
+        search,
+        page: pageParam,
+        limit: limitParam,
+        sort: sortParam
       } = req.query;
+
+      // ✅ PAGINATION: Extract and validate page/limit
+      const page = Math.max(1, parseInt(String(pageParam)) || 1);
+      const limit = Math.min(Math.max(1, parseInt(String(limitParam)) || 10), 50); // Default 10, max 50
+      const skip = (page - 1) * limit;
+      const sortMap: Record<string, any[]> = {
+        createdAt_desc: [{ createdAt: "desc" }, { id: "asc" }],
+        createdAt_asc: [{ createdAt: "asc" }, { id: "asc" }]
+      };
+      const sortValue = String(sortParam || "createdAt_desc");
+      const orderBy = sortMap[sortValue] || sortMap.createdAt_desc;
+
       const where: any = {};
       if (role && role !== "all") {
         const roleUpper = (role as string).toUpperCase();
@@ -120,6 +136,12 @@ export class AdminController {
           }
         }];
       }
+
+      // ✅ PAGINATION: Get total count for pagination meta
+      const total = await prisma.user.count({ where });
+      const totalPages = Math.ceil(total / limit);
+
+      // ✅ PAGINATION: Apply skip/take to query
       const users = await prisma.user.findMany({
         where,
         select: {
@@ -132,21 +154,26 @@ export class AdminController {
           createdAt: true,
           updatedAt: true
         },
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }]
+        orderBy,
+        skip,       // ✅ NEW: Pagination
+        take: limit  // ✅ NEW: Pagination
       });
+
       const transformedUsers = users.map((user) => ({
         ...user,
         role: user.role.toLowerCase(),
         status: user.isActive ? "active" : "disabled"
       }));
-      logger.info(`Admin: Fetched ${transformedUsers.length} users`);
+
+      logger.info(`Admin: Fetched ${transformedUsers.length} users (page ${page}/${totalPages})`);
       res.json({
         success: true,
         data: transformedUsers,
         meta: {
-          total: transformedUsers.length,
-          page: 1,
-          limit: transformedUsers.length
+          page,        // ✅ NEW: Current page
+          limit,       // ✅ NEW: Items per page
+          total,       // ✅ NEW: Total records
+          totalPages   // ✅ NEW: Total pages
         }
       });
     } catch (error: any) {
@@ -216,15 +243,35 @@ export class AdminController {
 
   /**
    * GET /api/admin/properties
-   * Get all properties with optional filters
-   * CRITICAL: Works with existing properties (backward compatible)
+   * Get all properties with optional filters, pagination, and sorting
+   * Query params: status, search, page (default: 1), limit (default: 10, max: 50), sort (default: createdAt_desc)
+   * CRITICAL: Maintains backward compatibility with existing filters
    */
   async getAllProperties(req: Request, res: Response) {
     try {
       const {
         status,
-        search
+        search,
+        page: pageParam,
+        limit: limitParam,
+        sort: sortParam
       } = req.query;
+
+      // ✅ PAGINATION: Extract and validate page/limit
+      const page = Math.max(1, parseInt(String(pageParam)) || 1);
+      const limit = Math.min(Math.max(1, parseInt(String(limitParam)) || 10), 50); // Default 10, max 50
+      const skip = (page - 1) * limit;
+
+      // ✅ SORTING: Map sort parameter to Prisma orderBy
+      const sortMap: Record<string, any[]> = {
+        createdAt_desc: [{ createdAt: "desc" }, { id: "asc" }],
+        createdAt_asc: [{ createdAt: "asc" }, { id: "asc" }],
+        price_asc: [{ pricePerMonth: "asc" }, { createdAt: "desc" }, { id: "asc" }],
+        price_desc: [{ pricePerMonth: "desc" }, { createdAt: "desc" }, { id: "asc" }]
+      };
+      const sortValue = String(sortParam || "createdAt_desc");
+      const orderBy = sortMap[sortValue] || sortMap.createdAt_desc;
+
       const where: any = {};
       if (status && status !== "all") {
         const statusMap: Record<string, string> = {
@@ -248,6 +295,12 @@ export class AdminController {
           }
         }];
       }
+
+      // ✅ PAGINATION: Get total count for pagination meta
+      const total = await prisma.room.count({ where });
+      const totalPages = Math.ceil(total / limit);
+
+      // ✅ PAGINATION + SORTING: Apply skip/take/orderBy to query
       const properties = await prisma.room.findMany({
         where,
         include: {
@@ -260,20 +313,25 @@ export class AdminController {
             }
           }
         },
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }]
+        orderBy,      // ✅ SORTING: Dynamic orderBy based on sort param
+        skip,         // ✅ PAGINATION
+        take: limit   // ✅ PAGINATION
       });
+
       const transformedProperties = properties.map((property) => ({
         ...property,
         reviewStatus: property.reviewStatus?.toLowerCase() || "approved"
       }));
-      logger.info(`Admin: Fetched ${transformedProperties.length} properties`);
+
+      logger.info(`Admin: Fetched ${transformedProperties.length} properties (page ${page}/${totalPages})`);
       res.json({
         success: true,
         data: transformedProperties,
         meta: {
-          total: transformedProperties.length,
-          page: 1,
-          limit: transformedProperties.length
+          page,        // ✅ NEW: Current page
+          limit,       // ✅ NEW: Items per page
+          total,       // ✅ NEW: Total records
+          totalPages   // ✅ NEW: Total pages
         }
       });
     } catch (error: any) {

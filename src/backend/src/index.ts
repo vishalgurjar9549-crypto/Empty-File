@@ -14,8 +14,9 @@ import { logger } from "./utils/logger";
 import { env } from "./config/env";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./swagger";
-import { getPrismaClient } from "./utils/prisma";
+import { getPrismaClient, disconnectDatabase } from "./utils/prisma";
 import { OwnerDailyNudgeService } from "./services/OwnerDailyNudgeService";
+import ogRoutes from "./routes/og.routes";
 
 // ── Passport Config ───────────────────────────────────
 import "./config/passport.config";
@@ -63,6 +64,11 @@ app.get("/health", (_, res) => {
 });
 
 /* =====================================================
+   ✅ PUBLIC OG PREVIEW ROUTES (NO AUTH)
+===================================================== */
+app.use("/og", ogRoutes);
+
+/* =====================================================
    ✅ SWAGGER (DISABLED IN PRODUCTION)
 ===================================================== */
 if (env.NODE_ENV !== "production") {
@@ -99,12 +105,65 @@ async function warmupDatabase() {
 ===================================================== */
 const PORT = env.PORT || 3001;
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${env.NODE_ENV}`);
 
   await warmupDatabase();
   ownerDailyNudgeService.start();
+});
+
+/* =====================================================
+   ✅ GRACEFUL SHUTDOWN HANDLERS
+   Handle SIGTERM (production deployments) and SIGINT (development)
+===================================================== */
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} received, initiating graceful shutdown...`);
+
+  // Stop accepting new connections
+  server.close(async () => {
+    logger.info('HTTP server closed');
+    
+    try {
+      // Stop background services
+      ownerDailyNudgeService.stop();
+      logger.info('Background services stopped');
+
+      // Disconnect Prisma (closes database connection pool)
+      await disconnectDatabase();
+      logger.info('Database connections closed');
+
+      logger.info('✅ Graceful shutdown completed');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during graceful shutdown:', err);
+      process.exit(1);
+    }
+  });
+
+  // Force shutdown after 30 seconds if graceful shutdown stalls
+  setTimeout(() => {
+    logger.error('❌ Graceful shutdown timeout, forcing exit');
+    process.exit(1);
+  }, 30000);
+};
+
+// Handle SIGTERM (production deployments, Docker, etc.)
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Handle SIGINT (Ctrl+C in development)
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logger.error('❌ Uncaught exception:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('❌ Unhandled rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
 export default app;

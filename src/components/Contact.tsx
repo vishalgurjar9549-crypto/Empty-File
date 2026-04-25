@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Instagram, Linkedin, Twitter } from 'lucide-react';
 export function Contact() {
-  return <section className="py-24 lg:py-40 px-8 lg:px-16 max-w-6xl mx-auto">
+  return <section className="py-24 lg:py-40 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
       <motion.div initial={{
       opacity: 0,
       y: 20

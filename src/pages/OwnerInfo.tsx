@@ -19,7 +19,7 @@ export function OwnerInfo() {
       {/* Hero */}
       <div className="bg-navy text-white py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-        <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <h1 className="text-4xl md:text-6xl font-bold font-playfair mb-6">
             Maximize Your Rental Yields
           </h1>
@@ -35,7 +35,7 @@ export function OwnerInfo() {
       </div>
 
       {/* Benefits */}
-      <div className="max-w-7xl mx-auto px-6 py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24">
         <div className="grid md:grid-cols-3 gap-12">
           {[{
           icon: TrendingUp,
@@ -64,7 +64,7 @@ export function OwnerInfo() {
 
       {/* Steps */}
       <div className="bg-white dark:bg-slate-900 py-24 border-t border-slate-100 dark:border-slate-800 transition-colors duration-300">
-        <div className="max-w-4xl mx-auto px-6">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-navy dark:text-white font-playfair text-center mb-16">
             How It Works
           </h2>

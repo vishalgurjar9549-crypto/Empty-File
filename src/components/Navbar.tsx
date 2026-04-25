@@ -297,6 +297,7 @@ import { logout } from "../store/slices/auth.slice";
 import { ThemeToggle } from "./ThemeToggle";
 import { PhoneModal } from "./PhoneModal";
 import { useListPropertyAction } from "../hooks/useListPropertyAction";
+import { NotificationBadge } from "./NotificationBadge";
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -513,6 +514,10 @@ const mobileNavClass = (active: boolean) =>
 
             {user ? (
               <div className="space-y-2">
+                <div className="flex justify-end">
+                  <NotificationBadge />
+                </div>
+
                 <Link
                   to="/profile"
                   className="flex items-center justify-between rounded-2xl border border-slate-200/70 px-4 py-3 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5"
@@ -627,6 +632,8 @@ const mobileNavClass = (active: boolean) =>
 
             {user ? (
               <div className="ml-2 flex items-center gap-2">
+                <NotificationBadge />
+
                 <Link
                   to="/profile"
                   className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all duration-300 hover:-translate-y-[1px] hover:border-gold/30 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"

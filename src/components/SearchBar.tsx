@@ -9,7 +9,8 @@ import {
   Check,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { loadCities } from "../store/slices/metadata.slice";
+// import { loadCities } from "../store/slices/metadata.slice";
+import { SEARCH_ROOM_TYPE_OPTIONS, SEARCH_BUDGET_OPTIONS } from "../constants/filterOptions";
 
 const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
 
@@ -57,11 +58,11 @@ function SearchDropdown({
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
@@ -245,11 +246,11 @@ function SearchableCitySelect({
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
   }, [selectedOption]);
@@ -419,20 +420,10 @@ export function SearchBar() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [cities]);
 
-  const propertyOptions: Option[] = [
-    { label: "Single Room", value: "single" },
-    { label: "Shared Room", value: "shared" },
-    { label: "PG", value: "pg" },
-    { label: "1 BHK", value: "1bhk" },
-    { label: "2 BHK", value: "2bhk" },
-  ];
-
-  const budgetOptions: Option[] = [
-    { label: "Under ₹10k", value: "0-10000" },
-    { label: "₹10k – ₹20k", value: "10000-20000" },
-    { label: "₹20k – ₹40k", value: "20000-40000" },
-    { label: "₹40k+", value: "40000-100000" },
-  ];
+  // ✅ CENTRALIZED: Use shared filter constants instead of hardcoded values
+  // This ensures consistency across all components (SearchBar, FilterSidebar, Modals)
+  const propertyOptions = SEARCH_ROOM_TYPE_OPTIONS;
+  const budgetOptions = SEARCH_BUDGET_OPTIONS;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -462,7 +453,7 @@ export function SearchBar() {
   focus-within:border-amber-400/60
   focus-within:ring-4 focus-within:ring-amber-400/10"
 >
-      <div className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr_1fr_auto] gap-3 sm:gap-4 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 sm:gap-4 items-stretch">
         <SearchableCitySelect
           id="search-city"
           label="City"
@@ -496,7 +487,7 @@ export function SearchBar() {
         <button
           type="submit"
           aria-label="Search for rooms"
-          className="group h-[60px] sm:h-[64px] w-full md:w-[180px] rounded-2xl bg-gradient-to-r text-slate-950 font-bold shadow-lg hover:shadow-amber-500/20 hover:scale-[1.01] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 text-sm sm:text-base focus:outline-none focus:ring-4 focus:ring-amber-400/20"
+          className="group h-[60px] sm:h-[64px] w-full md:w-auto md:min-w-[140px] rounded-2xl bg-gradient-to-r text-slate-950 font-bold shadow-lg hover:shadow-amber-500/20 hover:scale-[1.01] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 text-sm sm:text-base focus:outline-none focus:ring-4 focus:ring-amber-400/20"
           style={{ background: gold, color: dark }}
         >
           <Search className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />

@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, Eye, EyeOff, CheckCircle2, Clock } from "lucide-react";
 
 import { useAppDispatch } from "../../store/hooks";
-import { Button } from "../../components/ui/Button";
 import { authApi } from "../../api/auth.api";
 import { showToast } from "../../store/slices/ui.slice";
 
@@ -15,25 +14,6 @@ type FormErrors = {
 
 type PageState = "loading" | "validating" | "form" | "success" | "error";
 
-/**
- * RESET PASSWORD PAGE
- *
- * Allows users to set a new password using a reset token.
- *
- * Flow:
- * 1. Component mounts, validates the reset token from URL
- * 2. If valid, shows password reset form
- * 3. If invalid/expired, shows error message
- * 4. On submit, resets password and navigates to login
- *
- * Features:
- * - Token validation on mount
- * - Password strength requirements
- * - Show/hide password toggle
- * - Loading states
- * - Error handling
- * - Responsive design
- */
 export function ResetPassword() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -51,7 +31,6 @@ export function ResetPassword() {
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
   const token = searchParams.get("token");
 
-  // Validate token on mount
   useEffect(() => {
     const validateToken = async () => {
       if (!token) {
@@ -70,7 +49,7 @@ export function ResetPassword() {
           setPageState("error");
           setValidationError("Reset link is invalid or has expired");
         }
-      } catch (error: any) {
+      } catch {
         setPageState("error");
         setValidationError("Failed to validate reset token. Please try again.");
       }
@@ -100,10 +79,7 @@ export function ResetPassword() {
     return "";
   };
 
-  const validateConfirmPassword = (
-    passwordVal: string,
-    confirmVal: string
-  ) => {
+  const validateConfirmPassword = (passwordVal: string, confirmVal: string) => {
     if (!confirmVal) return "Please confirm your password";
     if (passwordVal !== confirmVal) return "Passwords do not match";
     return "";
@@ -119,30 +95,6 @@ export function ResetPassword() {
 
     setFormErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const handlePasswordChange = (value: string) => {
-    setPassword(value);
-    setFormErrors((prev) => ({
-      ...prev,
-      password: prev.password ? validatePassword(value) || undefined : prev.password,
-      confirmPassword:
-        confirmPassword && prev.confirmPassword
-          ? validateConfirmPassword(value, confirmPassword) || undefined
-          : prev.confirmPassword,
-      general: undefined,
-    }));
-  };
-
-  const handleConfirmPasswordChange = (value: string) => {
-    setConfirmPassword(value);
-    setFormErrors((prev) => ({
-      ...prev,
-      confirmPassword: prev.confirmPassword
-        ? validateConfirmPassword(password, value) || undefined
-        : prev.confirmPassword,
-      general: undefined,
-    }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -164,293 +116,141 @@ export function ResetPassword() {
 
       setPageState("success");
 
-      // Redirect to login after a few seconds
       setTimeout(() => {
         navigate("/auth/login");
       }, 2000);
     } catch (error: any) {
-      const errorMessage =
+      const msg =
         error.response?.data?.message ||
         error.message ||
         "Failed to reset password";
 
-      dispatch(
-        showToast({
-          message: errorMessage,
-          type: "error",
-        })
-      );
-
-      setFormErrors({ general: errorMessage });
+      dispatch(showToast({ message: msg, type: "error" }));
+      setFormErrors({ general: msg });
     } finally {
       setLoading(false);
     }
   };
 
-  // Loading State
+  /* ---------------- LOADING ---------------- */
   if (pageState === "loading" || pageState === "validating") {
     return (
-      <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
+      <main className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0d0b06]">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4 animate-pulse">
-            <Clock className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto bg-[#d4af37]/10">
+            <Clock className="w-7 h-7 text-[#d4af37] animate-spin" />
           </div>
-          <p className="text-slate-600 dark:text-slate-400">
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
             Validating reset link...
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
-  // Error State
+  /* ---------------- ERROR ---------------- */
   if (pageState === "error") {
     return (
-      <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
+      <main className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0d0b06] px-4">
         <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg dark:shadow-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
-            {/* Icon */}
-            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-red-600 dark:text-red-400" />
-            </div>
+          <div className="rounded-2xl p-[1px] bg-gradient-to-br from-[#d4af37]/40 to-transparent">
+            <div className="bg-gray-100 dark:bg-[#111] rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 mx-auto mb-5 rounded-full flex items-center justify-center bg-red-500/10">
+                <Lock className="w-7 h-7 text-red-400" />
+              </div>
 
-            {/* Error Message */}
-            <h2 className="text-2xl font-bold text-navy dark:text-white mb-2">
-              Link expired
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
-              {validationError ||
-                "This password reset link is no longer valid or has expired."}
-            </p>
+              <h2 className="text-2xl font-bold text-black dark:text-white mb-2">
+                Link expired
+              </h2>
 
-            {/* Action */}
-            <Link
-              to="/auth/forgot-password"
-              className="inline-block w-full"
-            >
-              <Button
-                fullWidth
-                size="lg"
-                className="bg-navy dark:bg-white text-white dark:text-navy hover:bg-navy/90 dark:hover:bg-slate-100 transition-all"
-              >
-                Request new link
-              </Button>
-            </Link>
+              <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+                {validationError}
+              </p>
 
-            {/* Help Text */}
-            <p className="mt-6 text-sm text-slate-600 dark:text-slate-400">
-              Remember your password?{" "}
-              <Link
-                to="/auth/login"
-                className="font-semibold text-navy dark:text-white hover:underline"
-              >
-                Sign in
+              <Link to="/auth/forgot-password">
+                <button className="w-full py-3 rounded-xl bg-[#d4af37] text-black font-semibold hover:brightness-110">
+                  Request new link
+                </button>
               </Link>
-            </p>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
-  // Success State
+  /* ---------------- SUCCESS ---------------- */
   if (pageState === "success") {
     return (
-      <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
+      <main className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0d0b06] px-4">
         <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg dark:shadow-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
-            {/* Icon */}
-            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          <div className="rounded-2xl p-[1px] bg-gradient-to-br from-[#d4af37]/40 to-transparent">
+            <div className="bg-gray-100 dark:bg-[#111] rounded-2xl p-8 text-center">
+              <CheckCircle2 className="w-7 h-7 text-[#d4af37] mx-auto mb-4" />
+
+              <h2 className="text-2xl font-bold text-black dark:text-white mb-2">
+                Password Reset
+              </h2>
+
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                Your password has been updated successfully.
+              </p>
             </div>
-
-            {/* Message */}
-            <h2 className="text-2xl font-bold text-navy dark:text-white mb-2">
-              Password reset!
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
-              Your password has been successfully reset. You can now login with your new password.
-            </p>
-
-            {/* Loading animation */}
-            <p className="text-sm text-slate-500 dark:text-slate-500">
-              Redirecting to login...
-            </p>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
-  // Form State
+  /* ---------------- FORM ---------------- */
   return (
-    <div className="min-h-screen bg-cream dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
-      <div className="w-full max-w-md">
-        {/* Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg dark:shadow-2xl p-8 animate-in fade-in zoom-in duration-300">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-navy dark:text-white mb-2">
-              Set new password
+    <main className="min-h-screen flex items-center justify-center px-4 bg-white dark:bg-[#0d0b06]">
+      <section className="w-full max-w-md">
+
+        <div className="rounded-2xl p-[1px] bg-gradient-to-br from-[#d4af37]/40 to-transparent">
+          <div className="bg-gray-100 dark:bg-[#111] rounded-2xl p-8 shadow-2xl">
+
+            <h1 className="text-3xl font-bold text-black dark:text-white mb-6">
+              Set New Password
             </h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Choose a strong password to secure your account
-            </p>
-          </div>
 
-          {/* Error Alert */}
-          {formErrors.general && (
-            <div
-              ref={errorSummaryRef}
-              role="alert"
-              tabIndex={-1}
-              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
-            >
-              <p className="text-sm font-medium text-red-800 dark:text-red-400">
+            {formErrors.general && (
+              <div className="mb-4 text-red-500 text-sm">
                 {formErrors.general}
-              </p>
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {/* Password Field */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-semibold text-navy dark:text-white mb-2"
-              >
-                New password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => handlePasswordChange(e.target.value)}
-                  onBlur={() => {
-                    if (password.trim()) {
-                      setFormErrors((prev) => ({
-                        ...prev,
-                        password: validatePassword(password) || undefined,
-                      }));
-                    }
-                  }}
-                  placeholder="At least 6 characters"
-                  className={`w-full px-4 py-3 rounded-xl border-2 transition-colors outline-none pr-10 ${
-                    formErrors.password
-                      ? "border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-700"
-                      : "border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                  } text-navy dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-navy dark:focus:border-white`}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
               </div>
-              {formErrors.password && (
-                <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">
-                  {formErrors.password}
-                </p>
-              )}
-            </div>
+            )}
 
-            {/* Confirm Password Field */}
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-semibold text-navy dark:text-white mb-2"
+            <form onSubmit={handleSubmit} className="space-y-5">
+
+              <input
+                type="password"
+                placeholder="New password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white dark:bg-black border border-gray-300 dark:border-gray-800 text-black dark:text-white"
+              />
+
+              <input
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white dark:bg-black border border-gray-300 dark:border-gray-800 text-black dark:text-white"
+              />
+
+              <button
+                type="submit"
+                disabled={!isFormValid || loading}
+                className="w-full py-3 rounded-xl bg-[#d4af37] text-black font-semibold"
               >
-                Confirm password
-              </label>
-              <div className="relative">
-                <input
-                  id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => handleConfirmPasswordChange(e.target.value)}
-                  onBlur={() => {
-                    if (confirmPassword.trim()) {
-                      setFormErrors((prev) => ({
-                        ...prev,
-                        confirmPassword:
-                          validateConfirmPassword(password, confirmPassword) ||
-                          undefined,
-                      }));
-                    }
-                  }}
-                  placeholder="Confirm your password"
-                  className={`w-full px-4 py-3 rounded-xl border-2 transition-colors outline-none pr-10 ${
-                    formErrors.confirmPassword
-                      ? "border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-700"
-                      : "border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                  } text-navy dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-navy dark:focus:border-white`}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-navy dark:hover:text-white"
-                  aria-label={
-                    showConfirmPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-              {formErrors.confirmPassword && (
-                <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">
-                  {formErrors.confirmPassword}
-                </p>
-              )}
-            </div>
+                {loading ? "Resetting..." : "Reset Password"}
+              </button>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              disabled={!isFormValid || loading}
-              className="bg-navy dark:bg-white text-white dark:text-navy hover:bg-navy/90 dark:hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  Resetting...
-                </span>
-              ) : (
-                "Reset password"
-              )}
-            </Button>
-          </form>
+            </form>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Remember your password?{" "}
-            <Link
-              to="/auth/login"
-              className="font-semibold text-navy dark:text-white hover:underline"
-            >
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

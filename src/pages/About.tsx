@@ -1,11 +1,14 @@
 
 export function About() {
-  return <div className="min-h-screen bg-cream dark:bg-slate-950 transition-colors duration-300">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-4xl font-bold text-navy dark:text-white font-playfair mb-8 text-center">
-          About Homilivo
-        </h1>
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 prose prose-slate dark:prose-invert max-w-none">
+  return (
+    <div className="min-h-screen bg-cream dark:bg-slate-950 transition-colors duration-300">
+      <section className="py-6 md:py-8 lg:py-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="space-y-6 sm:space-y-7 lg:space-y-8">
+            <h1 className="text-4xl sm:text-5xl font-bold text-navy dark:text-white font-playfair leading-tight text-center">
+              About Homilivo
+            </h1>
+            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 prose prose-slate dark:prose-invert max-w-none">
           <p className="text-lg leading-relaxed mb-6 text-slate-600 dark:text-slate-300">
             Homilivo is India's premier managed accommodation platform,
             dedicated to transforming the way students and young professionals
@@ -29,5 +32,8 @@ export function About() {
           </ul>
         </div>
       </div>
-    </div>;
+        </div>
+      </section>
+    </div>
+  );
 }

@@ -12,7 +12,7 @@
 import { ArrowRight, Sparkles, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { fetchWhatsNewSection } from "../store/slices/homeSections.slice";
 import { getRoomImage } from "../utils/propertyUtils";
 import type { Room } from "../types/api.types";
@@ -28,21 +28,31 @@ const FALLBACK_IMAGE =
 
 export function WhatsNewProperties() {
   const dispatch = useAppDispatch();
-  
+
   // ✅ TASK 1: Use ONLY homeSections.whatsNew
   // NOT global state.rooms
   const whatsNew = useAppSelector((state) => state.homeSections.whatsNew);
 
+  // ✅ FIX: Track if we've already initiated fetch to prevent re-runs
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
-    // Lazy load on mount
+    // ✅ FIX: Only fetch if:
+    // 1. We haven't fetched yet
+    // 2. Data is empty AND not currently loading AND no error
+    if (hasFetchedRef.current) {
+      return;
+    }
+
     if (
       whatsNew.rooms.length === 0 &&
       !whatsNew.loading &&
       !whatsNew.error
     ) {
+      hasFetchedRef.current = true;
       dispatch(fetchWhatsNewSection());
     }
-  }, [dispatch, whatsNew.rooms.length, whatsNew.loading, whatsNew.error]);
+  }, [dispatch]); // ✅ FIX: Only depend on dispatch - effect runs once on mount
 
   // ✅ Map API response to UI
   const mappedRooms = whatsNew.rooms.slice(0, 10).map((room: Room) => ({
@@ -119,7 +129,7 @@ export function WhatsNewProperties() {
   }
 
   return (
-    <section className="px-4 sm:py-4 lg:py-8 bg-white dark:bg-slate-950 transition-colors duration-300">
+    <section className="px-4 py-12 md:py-16 lg:py-20 bg-white dark:bg-slate-950 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="flex justify-between items-end mb-6 sm:mb-8 gap-4">

@@ -18,6 +18,7 @@ import { showToast } from "../store/slices/ui.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
 import FullscreenLoader from "./ui/Loader";
+import { FormGrid } from "./ui/FormGrid";
 import { Room, IdealFor, RoomType, GenderPreference } from "../types/api.types";
 import {
   ROOM_TYPES,
@@ -32,6 +33,9 @@ interface EditPropertyModalProps {
   room: Room;
   isAdmin?: boolean;
   onEditComplete?: () => void;
+
+  // ✅ ADD THIS
+  forcePendingResubmission?: boolean;
 }
 
 type FormDataType = {
@@ -135,6 +139,7 @@ export function EditPropertyModal({
   room,
   isAdmin = false,
   onEditComplete,
+  forcePendingResubmission = false,
 }: EditPropertyModalProps) {
   const dispatch = useAppDispatch();
   const { allCities, amenities } = useAppSelector((state) => state.metadata);
@@ -154,7 +159,9 @@ export function EditPropertyModal({
   const [showDropdown, setShowDropdown] = useState(false);
 
   const [formData, setFormData] = useState<FormDataType>(getRoomFormData(room));
-  const [initialData, setInitialData] = useState<FormDataType>(getRoomFormData(room));
+  const [initialData, setInitialData] = useState<FormDataType>(
+    getRoomFormData(room),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // ✅ Amenities are already loaded globally at App.tsx initialization
@@ -227,9 +234,13 @@ export function EditPropertyModal({
       if (e.key !== "Tab" || !modalRef.current) return;
 
       const focusableElements = modalRef.current.querySelectorAll<
-        HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLAnchorElement
+        | HTMLButtonElement
+        | HTMLInputElement
+        | HTMLSelectElement
+        | HTMLTextAreaElement
+        | HTMLAnchorElement
       >(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
 
       if (!focusableElements.length) return;
@@ -256,7 +267,7 @@ export function EditPropertyModal({
 
   const filteredCities = useMemo(() => {
     return allCities.filter((c) =>
-      c.name.toLowerCase().includes(search.toLowerCase())
+      c.name.toLowerCase().includes(search.toLowerCase()),
     );
   }, [allCities, search]);
 
@@ -289,7 +300,11 @@ export function EditPropertyModal({
   const validateChangedFields = (data: Partial<FormDataType>) => {
     const newErrors: Record<string, string> = {};
 
-    if ("title" in data && data.title !== undefined && data.title.trim().length < 5) {
+    if (
+      "title" in data &&
+      data.title !== undefined &&
+      data.title.trim().length < 5
+    ) {
       newErrors.title = "Title must be at least 5 characters.";
     }
 
@@ -297,7 +312,11 @@ export function EditPropertyModal({
       newErrors.city = "Please select a city.";
     }
 
-    if ("location" in data && data.location !== undefined && data.location.trim().length < 3) {
+    if (
+      "location" in data &&
+      data.location !== undefined &&
+      data.location.trim().length < 3
+    ) {
       newErrors.location = "Location is required.";
     }
 
@@ -305,12 +324,10 @@ export function EditPropertyModal({
 
     if (
       mapChanged &&
-      (
-        formData.latitude === null ||
+      (formData.latitude === null ||
         formData.longitude === null ||
         !Number.isFinite(formData.latitude) ||
-        !Number.isFinite(formData.longitude)
-      )
+        !Number.isFinite(formData.longitude))
     ) {
       newErrors.mapLocation = "Please pin the property on the map.";
     }
@@ -386,17 +403,30 @@ export function EditPropertyModal({
         showToast({
           message: "No changes made",
           type: "info",
-        })
+        }),
       );
       return;
     }
 
     if (!validateChangedFields(changedData)) return;
 
+    // const payload = {
+    //   ...changedData,
+    //   ...(changedData.pricePerMonth !== undefined && {
+    //     pricePerMonth: Number(changedData.pricePerMonth),
+    //   }),
+    // };
+
     const payload = {
       ...changedData,
       ...(changedData.pricePerMonth !== undefined && {
         pricePerMonth: Number(changedData.pricePerMonth),
+      }),
+
+      // 🔥 THIS FIXES EVERYTHING
+      ...(forcePendingResubmission && {
+        reviewStatus: "PENDING",
+        isActive: false,
       }),
     };
 
@@ -404,7 +434,7 @@ export function EditPropertyModal({
       updateRoom({
         id: room.id,
         data: payload,
-      })
+      }),
     );
 
     if (updateRoom.fulfilled.match(action)) {
@@ -449,14 +479,14 @@ export function EditPropertyModal({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveCityIndex((prev) =>
-        prev < filteredCities.length - 1 ? prev + 1 : 0
+        prev < filteredCities.length - 1 ? prev + 1 : 0,
       );
     }
 
     if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveCityIndex((prev) =>
-        prev > 0 ? prev - 1 : filteredCities.length - 1
+        prev > 0 ? prev - 1 : filteredCities.length - 1,
       );
     }
 
@@ -498,7 +528,7 @@ export function EditPropertyModal({
             aria-modal="true"
             aria-labelledby={modalTitleId}
             aria-describedby={modalDescriptionId}
-            className="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-[2rem] border border-[rgba(212,175,55,0.14)] bg-[#f8f6f1] shadow-2xl dark:bg-[#0d0b06] sm:h-auto sm:max-h-[94vh] sm:max-w-5xl sm:rounded-[2rem]"
+            className="relative z-50 flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-[2rem] border border-[rgba(212,175,55,0.14)] bg-[#f8f6f1] shadow-2xl dark:bg-[#0d0b06] sm:h-auto sm:max-h-[94vh] sm:max-w-5xl sm:rounded-[2rem]"
           >
             {/* Header */}
             <div className="sticky top-0 z-20 border-b border-[rgba(212,175,55,0.12)] bg-white/80 px-4 py-4 backdrop-blur-xl dark:bg-[#0d0b06]/90 sm:px-6">
@@ -603,7 +633,7 @@ export function EditPropertyModal({
                   subtitle="Edit the title, city and address details."
                   icon={<Home className="h-5 w-5" />}
                 >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormGrid columns={{ md: 2 }} gap="default">
                     <div>
                       <label htmlFor="title" className={labelClass}>
                         Property Title *
@@ -626,7 +656,9 @@ export function EditPropertyModal({
                           if (value.trim().length >= 5) clearError("title");
                         }}
                         aria-invalid={!!errors.title}
-                        aria-describedby={errors.title ? "title-error" : undefined}
+                        aria-describedby={
+                          errors.title ? "title-error" : undefined
+                        }
                         className={`${inputClass} ${
                           errors.title
                             ? "!border-red-400 !ring-4 !ring-red-100 dark:!border-red-500/70 dark:!ring-red-500/10"
@@ -672,7 +704,9 @@ export function EditPropertyModal({
                           }}
                           onKeyDown={handleCityKeyDown}
                           aria-invalid={!!errors.city}
-                          aria-describedby={errors.city ? "city-error" : undefined}
+                          aria-describedby={
+                            errors.city ? "city-error" : undefined
+                          }
                           className={`${inputClass} pr-11 ${
                             errors.city
                               ? "!border-red-400 !ring-4 !ring-red-100 dark:!border-red-500/70 dark:!ring-red-500/10"
@@ -698,7 +732,10 @@ export function EditPropertyModal({
                                 role="option"
                                 aria-selected={formData.city === c.id}
                                 onClick={() => {
-                                  setFormData((prev) => ({ ...prev, city: c.id }));
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    city: c.id,
+                                  }));
                                   setSearch(c.name);
                                   setShowDropdown(false);
                                   setActiveCityIndex(index);
@@ -735,9 +772,9 @@ export function EditPropertyModal({
                         <ErrorText id="city-error">{errors.city}</ErrorText>
                       )}
                     </div>
-                  </div>
+                  </FormGrid>
 
-                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormGrid columns={{ md: 2 }} gap="default" className="mt-4">
                     <div>
                       <label htmlFor="location" className={labelClass}>
                         Location *
@@ -756,7 +793,9 @@ export function EditPropertyModal({
                           if (value.trim().length >= 3) clearError("location");
                         }}
                         aria-invalid={!!errors.location}
-                        aria-describedby={errors.location ? "location-error" : undefined}
+                        aria-describedby={
+                          errors.location ? "location-error" : undefined
+                        }
                         className={`${inputClass} ${
                           errors.location
                             ? "!border-red-400 !ring-4 !ring-red-100 dark:!border-red-500/70 dark:!ring-red-500/10"
@@ -765,7 +804,9 @@ export function EditPropertyModal({
                         placeholder="e.g. Near Railway Station"
                       />
                       {errors.location && (
-                        <ErrorText id="location-error">{errors.location}</ErrorText>
+                        <ErrorText id="location-error">
+                          {errors.location}
+                        </ErrorText>
                       )}
                     </div>
 
@@ -786,7 +827,7 @@ export function EditPropertyModal({
                         placeholder="Nearby college, mall, metro..."
                       />
                     </div>
-                  </div>
+                  </FormGrid>
                 </SectionCard>
 
                 {/* Map */}
@@ -831,7 +872,7 @@ export function EditPropertyModal({
                   subtitle="Keep your listing clear and easy to compare."
                   icon={<IndianRupee className="h-5 w-5" />}
                 >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormGrid columns={{ md: 2 }} gap="default">
                     <div>
                       <label htmlFor="price" className={labelClass}>
                         Monthly Rent (₹) *
@@ -859,7 +900,9 @@ export function EditPropertyModal({
                           }
                         }}
                         aria-invalid={!!errors.pricePerMonth}
-                        aria-describedby={errors.pricePerMonth ? "price-error" : undefined}
+                        aria-describedby={
+                          errors.pricePerMonth ? "price-error" : undefined
+                        }
                         className={`${inputClass} ${
                           errors.pricePerMonth
                             ? "!border-red-400 !ring-4 !ring-red-100 dark:!border-red-500/70 dark:!ring-red-500/10"
@@ -868,7 +911,9 @@ export function EditPropertyModal({
                         placeholder="e.g. 8500"
                       />
                       {errors.pricePerMonth && (
-                        <ErrorText id="price-error">{errors.pricePerMonth}</ErrorText>
+                        <ErrorText id="price-error">
+                          {errors.pricePerMonth}
+                        </ErrorText>
                       )}
                     </div>
 
@@ -894,7 +939,7 @@ export function EditPropertyModal({
                         ))}
                       </select>
                     </div>
-                  </div>
+                  </FormGrid>
                 </SectionCard>
 
                 {/* ✅ NEW: Gender Preference Section */}
@@ -948,9 +993,11 @@ export function EditPropertyModal({
                   <fieldset
                     ref={(el) => (fieldRefs.current.idealFor = el)}
                     aria-invalid={!!errors.idealFor}
-                    aria-describedby={errors.idealFor ? "idealFor-error" : undefined}
+                    aria-describedby={
+                      errors.idealFor ? "idealFor-error" : undefined
+                    }
                   >
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
                       {IDEAL_FOR.map((option) => {
                         const active = formData.idealFor.includes(option);
 
@@ -982,10 +1029,12 @@ export function EditPropertyModal({
                           </label>
                         );
                       })}
-                    </div>
+                    </FormGrid>
 
                     {errors.idealFor && (
-                      <ErrorText id="idealFor-error">{errors.idealFor}</ErrorText>
+                      <ErrorText id="idealFor-error">
+                        {errors.idealFor}
+                      </ErrorText>
                     )}
                   </fieldset>
                 </SectionCard>
@@ -1019,7 +1068,9 @@ export function EditPropertyModal({
                       }}
                       aria-invalid={!!errors.description}
                       aria-describedby={
-                        errors.description ? "description-error" : "description-help"
+                        errors.description
+                          ? "description-error"
+                          : "description-help"
                       }
                       className={`${textareaClass} ${
                         errors.description
@@ -1059,7 +1110,7 @@ export function EditPropertyModal({
                     ref={(el) => (fieldRefs.current.amenities = el)}
                     className="space-y-3"
                   >
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
                       {amenities.map((amenity) => {
                         const active = formData.amenities.includes(amenity);
 
@@ -1091,7 +1142,7 @@ export function EditPropertyModal({
                           </label>
                         );
                       })}
-                    </div>
+                    </FormGrid>
                   </fieldset>
                 </SectionCard>
 

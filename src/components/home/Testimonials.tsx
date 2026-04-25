@@ -44,7 +44,7 @@ function Testimonials() {
   const dark = "#0d0b06";
 
   return (
-    <section className="py-8 md:py-10 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950">
+    <section className="py-12 md:py-16 lg:py-20 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="mb-6 md:mb-8 flex items-end justify-between gap-4">

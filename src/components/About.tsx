@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 export function About() {
-  return <section className="py-24 lg:py-32 px-8 lg:px-16 max-w-6xl mx-auto bg-neutral-100/50 my-12 rounded-sm">
+  return <section className="py-24 lg:py-32 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto bg-neutral-100/50 my-12 rounded-sm">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24">
         <div className="lg:col-span-5">
           <motion.h2 initial={{

@@ -3,6 +3,8 @@ import { useEffect, useRef, KeyboardEvent } from "react";
 import { useAppDispatch } from '../store/hooks';
 import { showToast } from '../store/slices/ui.slice';
 
+const PUBLIC_SITE_URL = "https://homilivo.com";
+
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,7 +18,7 @@ export function ShareModal({ isOpen, onClose, room }: ShareModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 
-  const shareUrl = room ? `${window.location.origin}/rooms/${room.id}` : "";
+  const shareUrl = room ? `${PUBLIC_SITE_URL}/og/property/${room.id}` : "";
 
   const shareText = room
     ? `🏡 Check out this room in ${room.city}

@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../utils/password';
-import { adminAssignmentService } from './services/AdminAssignmentService';
-const prisma = new PrismaClient();
+import { hashPassword } from '../src/utils/password';
+import { adminAssignmentService } from '../src/services/AdminAssignmentService';
+import { getPrismaClient } from '../src/utils/prisma';
+
+const prisma = getPrismaClient();
 
 // ─── 150 Indian Cities ───────────────────────────────────────────────────────
 const INDIAN_CITIES = [

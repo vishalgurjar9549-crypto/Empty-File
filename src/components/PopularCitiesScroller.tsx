@@ -159,7 +159,7 @@ export default function PopularCitiesScroller({
   if (isLoading) {
     return (
       <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
-        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 flex items-end justify-between gap-4">
             <div>
               <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 animate-pulse">
@@ -190,7 +190,7 @@ export default function PopularCitiesScroller({
   if (!mergedCities || mergedCities.length === 0) {
     return (
       <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
-        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 flex items-end justify-between gap-4">
             <div>
               <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
@@ -219,7 +219,7 @@ export default function PopularCitiesScroller({
 
   return (
     <section className="relative overflow-hidden py-8 bg-white dark:bg-[#050505]">
-      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Heading */}
         <div className="mb-10 flex items-end justify-between gap-4">
           <div>

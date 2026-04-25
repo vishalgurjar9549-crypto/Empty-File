@@ -67,6 +67,56 @@ import { clearOtpRetryData, openOtpModal } from "../store/slices/otp.slice";
 import { ShareModal } from "../components/ShareModal";
 import { RoomDetailsSkeleton } from "../components/ui/RoomDetailsSkeleton";
 import { PropertyImageGallery } from "../components/PropertyImageGallery";
+import { getRoomImage } from "../utils/propertyUtils";
+import UnlockConfirmModal from "../components/UnlockConfirmModal";
+
+const PUBLIC_SITE_URL = "https://homilivo.com";
+const DEFAULT_OG_IMAGE = `${PUBLIC_SITE_URL}/og-image.png`;
+
+const isLocalUrl = (url: string) =>
+  /^(https?:)?\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?/i.test(url);
+
+const getPublicUrl = (path: string) => `${PUBLIC_SITE_URL}${path}`;
+
+const getPublicShareUrl = (propertyId: string) =>
+  getPublicUrl(`/og/property/${propertyId}`);
+
+const getPublicImageUrl = (imageUrl?: string | null) => {
+  if (!imageUrl) return DEFAULT_OG_IMAGE;
+
+  if (/^https?:\/\//i.test(imageUrl)) {
+    return isLocalUrl(imageUrl) ? DEFAULT_OG_IMAGE : imageUrl;
+  }
+
+  if (imageUrl.startsWith("//")) {
+    const absoluteUrl = `https:${imageUrl}`;
+    return isLocalUrl(absoluteUrl) ? DEFAULT_OG_IMAGE : absoluteUrl;
+  }
+
+  if (imageUrl.startsWith("/")) {
+    return getPublicUrl(imageUrl);
+  }
+
+  return DEFAULT_OG_IMAGE;
+};
+
+const setMetaTag = (
+  attribute: "name" | "property",
+  key: string,
+  content: string
+) => {
+  let element = document.head.querySelector<HTMLMetaElement>(
+    `meta[${attribute}="${key}"]`
+  );
+
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute(attribute, key);
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute("content", content);
+};
 
 const iconMap: Record<string, any> = {
   WiFi: Wifi,
@@ -112,160 +162,8 @@ function SectionCard({
   );
 }
 
-function UnlockConfirmModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  isUnlocking,
-  todayContacts,
-  remainingContacts,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  isUnlocking: boolean;
-  todayContacts: number;
-  remainingContacts: number | null;
-}) {
-  if (!isOpen) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="unlock-confirm-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isUnlocking) {
-          onClose();
-        }
-      }}
-    >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl relative border border-slate-200 dark:border-slate-800">
-        <button
-          onClick={onClose}
-          disabled={isUnlocking}
-          aria-label="Close unlock confirmation"
-          className="absolute top-4 right-4 text-slate-500 hover:text-black dark:hover:text-white p-2 rounded-lg transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
 
-        <h2
-          id="unlock-confirm-title"
-          className="text-xl font-semibold text-slate-900 dark:text-white"
-        >
-          Confirm Unlock
-        </h2>
-
-        <div className="mt-5 space-y-3">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              🔥 {todayContacts} people already contacted
-            </p>
-          </div>
-
-          {remainingContacts !== null && (
-            <div className="rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                ⚠️ Only {remainingContacts} contacts left
-              </p>
-              {remainingContacts <= 3 && (
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-300 mt-2">
-                  🔥 Almost full — act fast before this property gets taken
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <Button
-            onClick={onClose}
-            variant="secondary"
-            fullWidth
-            disabled={isUnlocking}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={onConfirm}
-            variant="primary"
-            fullWidth
-            disabled={isUnlocking}
-          >
-            {isUnlocking ? "Unlocking..." : "Confirm Unlock"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExitIntentModal({
-  isOpen,
-  onClose,
-  onUnlock,
-  todayContacts,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onUnlock: () => void;
-  todayContacts: number;
-}) {
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="exit-intent-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl relative border border-slate-200 dark:border-slate-800">
-        <button
-          onClick={onClose}
-          aria-label="Close exit intent modal"
-          className="absolute top-4 right-4 text-slate-500 hover:text-black dark:hover:text-white p-2 rounded-lg transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <h2
-          id="exit-intent-title"
-          className="text-xl font-semibold text-slate-900 dark:text-white"
-        >
-          Wait! This property is getting attention
-        </h2>
-
-        <div className="mt-5 space-y-3">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              🔥 {todayContacts} people already contacted
-            </p>
-          </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Unlock now before it is gone.
-          </p>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <Button onClick={onClose} variant="secondary" fullWidth>
-            Not Now
-          </Button>
-          <Button onClick={onUnlock} variant="primary" fullWidth>
-            Unlock Contact
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function RoomDetails() {
   const { id } = useParams();
@@ -286,7 +184,7 @@ export function RoomDetails() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isUnlockConfirmOpen, setIsUnlockConfirmOpen] = useState(false);
-  const [isExitIntentOpen, setIsExitIntentOpen] = useState(false);
+  
   const [contactData, setContactData] =
     useState<UnlockContactResponse | null>(null);
   const [contactLocked, setContactLocked] = useState<boolean | null>(null);
@@ -304,13 +202,7 @@ export function RoomDetails() {
 
   const isFavorited = useAppSelector(selectIsFavorited(id || ""));
   const isTogglingFavorite = useAppSelector(selectIsToggling(id || ""));
-  const hasShownExitIntentRef = useRef(false);
-  const exitIntentBlockersRef = useRef({
-    isUpgradeModalOpen: false,
-    isUnlockConfirmOpen: false,
-    isExitIntentOpen: false,
-  });
-
+ 
   const similarRooms = useMemo(
     () =>
       rooms
@@ -415,6 +307,29 @@ export function RoomDetails() {
   }, [id, dispatch]);
 
   useEffect(() => {
+    if (!room?.id) return;
+
+    const price = `₹${room.pricePerMonth.toLocaleString("en-IN")}`;
+    const location = [room.location, room.city].filter(Boolean).join(", ");
+    const propertyUrl = getPublicUrl(`/property/${room.id}`);
+    const imageUrl = getPublicImageUrl(getRoomImage(room));
+    const title = `${room.title} - ${price}`;
+    const description = `${room.roomType} for rent in ${location} at ${price}/month`;
+
+    document.title = `${title} | Homilivo`;
+    setMetaTag("name", "description", description);
+    setMetaTag("property", "og:title", title);
+    setMetaTag("property", "og:description", description);
+    setMetaTag("property", "og:image", imageUrl);
+    setMetaTag("property", "og:url", propertyUrl);
+    setMetaTag("property", "og:type", "website");
+    setMetaTag("name", "twitter:card", "summary_large_image");
+    setMetaTag("name", "twitter:title", title);
+    setMetaTag("name", "twitter:description", description);
+    setMetaTag("name", "twitter:image", imageUrl);
+  }, [room]);
+
+  useEffect(() => {
     if (!room?.id || !room?.city || room.city === "undefined") return;
 
     dispatch(
@@ -487,84 +402,8 @@ export function RoomDetails() {
     }
   }, [room?.id, authStatus, visibility, contactData, hydrateContact, hasActivePlan]);
 
-  useEffect(() => {
-    hasShownExitIntentRef.current = false;
-    setIsExitIntentOpen(false);
-  }, [room?.id]);
+ 
 
-  useEffect(() => {
-    exitIntentBlockersRef.current = {
-      isUpgradeModalOpen,
-      isUnlockConfirmOpen,
-      isExitIntentOpen,
-    };
-  }, [isUpgradeModalOpen, isUnlockConfirmOpen, isExitIntentOpen]);
-
-  useEffect(() => {
-    if (
-      !room?.id ||
-      contactData ||
-      hasActivePlan ||
-      visibility?.isUnlocked ||
-      (authStatus === "AUTHENTICATED" && !visibility)
-    ) {
-      return;
-    }
-
-    const showExitIntent = () => {
-      const blockers = exitIntentBlockersRef.current;
-      if (
-        hasShownExitIntentRef.current ||
-        blockers.isUpgradeModalOpen ||
-        blockers.isUnlockConfirmOpen ||
-        blockers.isExitIntentOpen
-      ) {
-        return;
-      }
-
-      hasShownExitIntentRef.current = true;
-      setIsExitIntentOpen(true);
-    };
-
-    const handleMouseOut = (event: MouseEvent) => {
-      if (event.clientY <= 0) {
-        showExitIntent();
-      }
-    };
-
-    const handlePopState = () => {
-      if (hasShownExitIntentRef.current) {
-        return;
-      }
-
-      window.history.pushState(
-        { roomExitIntentGuard: room.id },
-        "",
-        window.location.href,
-      );
-      showExitIntent();
-    };
-
-    window.history.pushState(
-      { roomExitIntentGuard: room.id },
-      "",
-      window.location.href,
-    );
-    document.addEventListener("mouseout", handleMouseOut);
-    window.addEventListener("popstate", handlePopState);
-
-    return () => {
-      document.removeEventListener("mouseout", handleMouseOut);
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [
-    room?.id,
-    contactData,
-    hasActivePlan,
-    visibility?.isUnlocked,
-    authStatus,
-    visibility,
-  ]);
 
   useEffect(() => {
     if (!id) return;
@@ -595,7 +434,7 @@ export function RoomDetails() {
   const handleShare = useCallback(async () => {
     if (!room || !room.id) return;
 
-    const shareUrl = `${window.location.origin}/rooms/${room.id}`;
+    const shareUrl = getPublicShareUrl(room.id);
     const shareTitle = room.title || "Check out this room";
     const shareText = `🏡 Check out this room in ${room.city}
 ₹${room.pricePerMonth?.toLocaleString?.() || room.pricePerMonth}/month • ${
@@ -754,7 +593,6 @@ No brokerage. Direct owner contact.
       return;
     }
 
-    setIsExitIntentOpen(false);
     setIsUnlockConfirmOpen(true);
   }, [authStatus, navigate, id, room, isFreeLimitReached]);
 
@@ -822,12 +660,7 @@ No brokerage. Direct owner contact.
         remainingContacts={remainingContacts}
       />
 
-      <ExitIntentModal
-        isOpen={isExitIntentOpen}
-        onClose={() => setIsExitIntentOpen(false)}
-        onUnlock={handleUnlockContact}
-        todayContacts={displayTodayContacts}
-      />
+    
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 md:py-8">
         {/* Breadcrumb */}

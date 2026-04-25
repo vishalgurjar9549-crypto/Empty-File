@@ -40,7 +40,7 @@ export function StayCollectionShowcase() {
   ];
 
   return (
-    <section className="w-full ">
+    <section className="w-full py-12 md:py-16 lg:py-20">
       <div
         className="relative overflow-hidden rounded-2xl w-full mx-auto"
         style={{

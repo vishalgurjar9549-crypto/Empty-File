@@ -83,6 +83,35 @@ export const BUDGET_RANGES: BudgetRange[] = [
 ];
 
 // ============================================
+// SEARCH BAR OPTIONS (with lowercase values for API)
+// ============================================
+
+/**
+ * Room type options for SearchBar dropdown
+ * Format: { label: string, value: lowercase_room_type }
+ * Backend maps lowercase to proper case in RoomController
+ */
+export interface SearchOption {
+  label: string;
+  value: string;
+}
+
+export const SEARCH_ROOM_TYPE_OPTIONS: SearchOption[] = ROOM_TYPES.map((type) => ({
+  label: type,
+  value: type.toLowerCase(),
+}));
+
+/**
+ * Budget options for SearchBar dropdown
+ * Format: { label: string, value: "min-max" }
+ * SearchBar parses this string format for API parameters
+ */
+export const SEARCH_BUDGET_OPTIONS: SearchOption[] = BUDGET_RANGES.map((range) => ({
+  label: range.label,
+  value: `${range.min}-${range.max}`,
+}));
+
+// ============================================
 // UTILITIES
 // ============================================
 

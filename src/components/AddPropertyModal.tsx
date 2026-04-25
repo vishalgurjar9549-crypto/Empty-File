@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState, useId } from "react";
+import React, { useEffect, useMemo, useRef, useState, useId, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronDown, Check, MapPin, Home, IndianRupee, Sparkles, Users } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { createRoom } from "../store/slices/rooms.slice";
@@ -7,6 +8,7 @@ import { loadAllCities } from "../store/slices/metadata.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
 import FullscreenLoader from "./ui/Loader";
+import { FormGrid } from "./ui/FormGrid";
 import { RoomType, IdealFor, GenderPreference } from "../types/api.types";
 import {
   ROOM_TYPES,
@@ -89,11 +91,19 @@ export function AddPropertyModal({
   const firstFocusableRef = useRef<HTMLInputElement | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
   const cityWrapperRef = useRef<HTMLDivElement | null>(null);
+  // ✅ NEW: Separate ref for the city input element (used to measure position for portal)
+  const cityInputRef = useRef<HTMLInputElement | null>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const [activeCityIndex, setActiveCityIndex] = useState<number>(-1);
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  // ✅ NEW: Track dropdown position for portal rendering
+  const [dropdownPos, setDropdownPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -108,14 +118,11 @@ export function AddPropertyModal({
     description: "",
     amenities: [] as string[],
     images: [] as string[],
-    // ✅ NEW: Gender preference field
     genderPreference: "ANY" as GenderPreference,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // ✅ Amenities are already loaded globally at App.tsx initialization
-  // Only load allCities here if needed
   useEffect(() => {
     if (allCities.length === 0) dispatch(loadAllCities());
   }, [dispatch, allCities.length]);
@@ -149,12 +156,20 @@ export function AddPropertyModal({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, isCreating]);
 
+  // ✅ UPDATED: Outside click now closes dropdown via the portal; checks both wrapper and portal
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (
-        cityWrapperRef.current &&
-        !cityWrapperRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node;
+
+      // Check if click is inside the city input wrapper
+      const insideWrapper =
+        cityWrapperRef.current && cityWrapperRef.current.contains(target);
+
+      // Check if click is inside the portal dropdown (rendered in body)
+      const portalDropdown = document.getElementById("city-dropdown-portal");
+      const insidePortal = portalDropdown && portalDropdown.contains(target);
+
+      if (!insideWrapper && !insidePortal) {
         setShowDropdown(false);
       }
     };
@@ -197,6 +212,39 @@ export function AddPropertyModal({
     return () => document.removeEventListener("keydown", handleFocusTrap);
   }, [isOpen]);
 
+  // ✅ NEW: Measure city input position whenever dropdown should show, and on scroll/resize
+  const updateDropdownPosition = useCallback(() => {
+    if (!cityInputRef.current) return;
+    const rect = cityInputRef.current.getBoundingClientRect();
+    setDropdownPos({
+      top: rect.bottom + 8,    // 8px gap below input
+      left: rect.left,
+      width: rect.width,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (showDropdown) {
+      updateDropdownPosition();
+    }
+  }, [showDropdown, search, updateDropdownPosition]);
+
+  // ✅ NEW: Re-measure on scroll or resize so the portal dropdown stays aligned
+  useEffect(() => {
+    if (!showDropdown) return;
+
+    const scrollEl = modalRef.current?.querySelector(".flex-1.overflow-y-auto");
+
+    const handleUpdate = () => updateDropdownPosition();
+    window.addEventListener("resize", handleUpdate);
+    scrollEl?.addEventListener("scroll", handleUpdate);
+
+    return () => {
+      window.removeEventListener("resize", handleUpdate);
+      scrollEl?.removeEventListener("scroll", handleUpdate);
+    };
+  }, [showDropdown, updateDropdownPosition]);
+
   const filteredCities = useMemo(() => {
     return allCities.filter((c) =>
       c.name.toLowerCase().includes(search.toLowerCase())
@@ -228,7 +276,6 @@ export function AddPropertyModal({
       description: "",
       amenities: [],
       images: [],
-      // ✅ NEW: Reset gender preference to default
       genderPreference: "ANY",
     });
     setErrors({});
@@ -406,11 +453,80 @@ export function AddPropertyModal({
     }
   };
 
+  // ✅ NEW: Portal dropdown — rendered into document.body so it escapes all stacking contexts
+  const cityDropdownPortal =
+    showDropdown && search.trim().length > 0 && dropdownPos
+      ? createPortal(
+          <div
+            id="city-dropdown-portal"
+            style={{
+              position: "fixed",
+              top: dropdownPos.top,
+              left: dropdownPos.left,
+              width: dropdownPos.width,
+              zIndex: 99999,
+            }}
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            {filteredCities.length > 0 ? (
+              <ul
+                id="city-listbox"
+                role="listbox"
+                className="max-h-60 overflow-y-auto p-2"
+              >
+                {filteredCities.map((c, index) => {
+                  const selected = formData.city === c.id;
+                  const active = activeCityIndex === index;
+
+                  return (
+                    <li
+                      key={c.id}
+                      id={`city-option-${index}`}
+                      role="option"
+                      aria-selected={selected}
+                      onMouseDown={(e) => {
+                        // Use onMouseDown + preventDefault to prevent input blur before click registers
+                        e.preventDefault();
+                        setFormData((prev) => ({ ...prev, city: c.id }));
+                        setSearch(c.name);
+                        setShowDropdown(false);
+                        setActiveCityIndex(index);
+                        clearError("city");
+                      }}
+                      className={`flex cursor-pointer items-center justify-between rounded-xl px-3 py-3 text-sm transition ${
+                        active
+                          ? "bg-slate-100 dark:bg-slate-700"
+                          : "hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                      } ${
+                        selected
+                          ? "font-medium text-amber-700 dark:text-amber-300"
+                          : "text-slate-700 dark:text-slate-200"
+                      }`}
+                    >
+                      <span>{c.name}</span>
+                      {selected && <Check className="h-4 w-4" />}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+                No cities found.
+              </div>
+            )}
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <>
       {isCreating && (
         <FullscreenLoader message="Submitting your property listing..." />
       )}
+
+      {/* ✅ Portal dropdown rendered here, outside all modal stacking contexts */}
+      {cityDropdownPortal}
 
       <div className="fixed inset-0 z-[60] p-0 sm:p-4">
         <div
@@ -426,7 +542,7 @@ export function AddPropertyModal({
             aria-modal="true"
             aria-labelledby={modalTitleId}
             aria-describedby={modalDescriptionId}
-            className="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-slate-50 shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-5xl sm:rounded-3xl"
+            className="relative z-10 flex h-[100dvh] w-full flex-col overflow-visible rounded-t-3xl bg-slate-50 shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-5xl sm:rounded-3xl"
           >
             {/* Header */}
             <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 sm:px-6">
@@ -465,7 +581,7 @@ export function AddPropertyModal({
             {/* Form */}
             <form
               onSubmit={handleSubmit}
-              className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"
+              className="flex-1 overflow-y-auto overflow-x-visible px-4 py-4 sm:px-6 sm:py-6"
               noValidate
             >
               <div className="mx-auto max-w-4xl space-y-5">
@@ -520,7 +636,7 @@ export function AddPropertyModal({
                   subtitle="Give your listing a clear title and accurate location details."
                   icon={<MapPin className="h-5 w-5" />}
                 >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormGrid columns={{ md: 2 }} gap="default">
                     <div>
                       <label htmlFor="title" className={labelClass}>
                         Property Title *
@@ -548,7 +664,8 @@ export function AddPropertyModal({
                       )}
                     </div>
 
-                    <div className="relative" ref={cityWrapperRef}>
+                    {/* ✅ UPDATED: City field — no longer needs z-[100] or relative positioning tricks */}
+                    <div ref={cityWrapperRef}>
                       <label htmlFor="city-search" className={labelClass}>
                         City *
                       </label>
@@ -565,7 +682,10 @@ export function AddPropertyModal({
                               ? `city-option-${activeCityIndex}`
                               : undefined
                           }
-                          ref={(el) => (fieldRefs.current.city = el)}
+                          ref={(el) => {
+                            cityInputRef.current = el;
+                            fieldRefs.current.city = el;
+                          }}
                           type="text"
                           value={search}
                           placeholder="Search city..."
@@ -586,55 +706,6 @@ export function AddPropertyModal({
                         />
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                       </div>
-
-                      {showDropdown && search.trim().length > 0 && (
-                        <div className="absolute left-0 top-full z-[9999] mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                          {filteredCities.length > 0 ? (
-                            <ul
-                              id="city-listbox"
-                              role="listbox"
-                              className="max-h-60 overflow-y-auto p-2"
-                            >
-                              {filteredCities.map((c, index) => {
-                                const selected = formData.city === c.id;
-                                const active = activeCityIndex === index;
-
-                                return (
-                                  <li
-                                    key={c.id}
-                                    id={`city-option-${index}`}
-                                    role="option"
-                                    aria-selected={selected}
-                                    onClick={() => {
-                                      setFormData((prev) => ({ ...prev, city: c.id }));
-                                      setSearch(c.name);
-                                      setShowDropdown(false);
-                                      setActiveCityIndex(index);
-                                      clearError("city");
-                                    }}
-                                    className={`flex cursor-pointer items-center justify-between rounded-xl px-3 py-3 text-sm transition ${
-                                      active
-                                        ? "bg-slate-100 dark:bg-slate-700"
-                                        : "hover:bg-slate-50 dark:hover:bg-slate-700/60"
-                                    } ${
-                                      selected
-                                        ? "font-medium text-amber-700 dark:text-amber-300"
-                                        : "text-slate-700 dark:text-slate-200"
-                                    }`}
-                                  >
-                                    <span>{c.name}</span>
-                                    {selected && <Check className="h-4 w-4" />}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          ) : (
-                            <div className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
-                              No cities found.
-                            </div>
-                          )}
-                        </div>
-                      )}
 
                       {errors.city && (
                         <ErrorText id="city-error">{errors.city}</ErrorText>
@@ -683,7 +754,7 @@ export function AddPropertyModal({
                         placeholder="e.g. Near Allen Samyak"
                       />
                     </div>
-                  </div>
+                  </FormGrid>
                 </SectionCard>
 
                 <div ref={(el) => (fieldRefs.current.mapLocation = el)}>
@@ -725,7 +796,7 @@ export function AddPropertyModal({
                   subtitle="Set the rent and choose the room configuration."
                   icon={<IndianRupee className="h-5 w-5" />}
                 >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormGrid columns={{ md: 2 }} gap="default">
                     <div>
                       <label htmlFor="price" className={labelClass}>
                         Monthly Rent (₹) *
@@ -788,10 +859,9 @@ export function AddPropertyModal({
                         ))}
                       </select>
                     </div>
-                  </div>
+                  </FormGrid>
                 </SectionCard>
 
-                {/* ✅ NEW: Gender Preference Section */}
                 <SectionCard
                   title="Who can rent?"
                   subtitle="Specify if this property is available for anyone, boys only, or girls only."
@@ -801,7 +871,7 @@ export function AddPropertyModal({
                     ref={(el) => (fieldRefs.current.genderPreference = el)}
                   >
                     <legend className="sr-only">Gender Preference</legend>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
                       {GENDER_PREFERENCE_OPTIONS.map((option) => (
                         <label
                           key={option}
@@ -829,7 +899,7 @@ export function AddPropertyModal({
                           </span>
                         </label>
                       ))}
-                    </div>
+                    </FormGrid>
                   </fieldset>
                 </SectionCard>
 
@@ -845,7 +915,7 @@ export function AddPropertyModal({
                   >
                     <legend className="sr-only">Ideal For</legend>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
                       {IDEAL_FOR.map((option) => {
                         const selected = formData.idealFor.includes(option);
 
@@ -870,7 +940,7 @@ export function AddPropertyModal({
                           </label>
                         );
                       })}
-                    </div>
+                    </FormGrid>
 
                     {errors.idealFor && (
                       <ErrorText id="idealFor-error">
@@ -945,7 +1015,7 @@ export function AddPropertyModal({
                   >
                     <legend className="sr-only">Amenities</legend>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
                       {amenities.map((amenity) => {
                         const selected = formData.amenities.includes(amenity);
 
@@ -970,7 +1040,7 @@ export function AddPropertyModal({
                           </label>
                         );
                       })}
-                    </div>
+                    </FormGrid>
 
                     {errors.amenities && (
                       <ErrorText id="amenities-error">
@@ -997,7 +1067,7 @@ export function AddPropertyModal({
                     type="submit"
                     disabled={isCreating}
                     aria-busy={isCreating}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[rgba(212,175,55,0.9)] px-4 text-sm font-semibold text-white transition hover:bg-[rgba(189,158,56,0.9)] focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:opacity-50 dark:bg-[rgba(212,175,55,0.9)]  dark:text-slate-900 dark:hover:bg-[rgba(189,158,56,0.9)] dark:focus:ring-slate-700 sm:flex-1"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[rgba(212,175,55,0.9)] px-4 text-sm font-semibold text-white transition hover:bg-[rgba(189,158,56,0.9)] focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:opacity-50 dark:bg-[rgba(212,175,55,0.9)] dark:text-slate-900 dark:hover:bg-[rgba(189,158,56,0.9)] dark:focus:ring-slate-700 sm:flex-1"
                   >
                     {isCreating ? (
                       <>

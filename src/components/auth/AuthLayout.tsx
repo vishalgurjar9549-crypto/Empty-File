@@ -61,13 +61,13 @@ export function AuthLayout({
                 {heroBadge}
               </p>
 
-              <h1 className="mt-6 text-4xl xl:text-5xl font-bold leading-tight font-playfair">
-                {heroTitle}
-              </h1>
+          <h1 className="mt-6 text-4xl xl:text-5xl font-bold leading-tight font-playfair text-white">
+  {heroTitle}
+</h1>
 
-              <p className="mt-5 text-base xl:text-lg text-white/75 leading-8">
-                {heroDescription}
-              </p>
+             <p className="mt-5 text-base xl:text-lg text-white/80 leading-8">
+  {heroDescription}
+</p>
 
               <div className="mt-10 grid gap-4">
                 {heroPoints.map((point, index) => (
@@ -96,7 +96,7 @@ export function AuthLayout({
         {/* ----------------------------------------
             Right / Form Panel
         ----------------------------------------- */}
-        <section className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+        <section className="flex min-h-screen items-center justify-center">
           <div className="w-full max-w-md">
             {/* Mobile Logo */}
             <div className="mb-8 text-center lg:hidden">
