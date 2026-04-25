@@ -390,8 +390,10 @@
     gap: 4px;
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
-    white-space: nowrap;
     font-weight: var(--weight-medium);
+    font-family: var(--font-body);
+    line-height: 1.4;
+    flex-wrap: wrap;
   }
 
   .compact-metric-value {
@@ -470,8 +472,9 @@
     color: var(--color-text-secondary);
     font-size: var(--text-xs);
     margin-top: var(--space-3);
-    font-weight: 400;
-    line-height: 1.4;
+    font-weight: var(--weight-medium);
+    font-family: var(--font-body);
+    line-height: 1.5;
     letter-spacing: 0.3px;
   }
 
@@ -859,10 +862,12 @@
   }
 
   .owner-property-card-title {
+    font-family: var(--font-body);
     font-size: 18px;
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     color: var(--color-text-primary);
-    line-height: 1.3;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
   }
 
   .owner-property-card-meta-row,
@@ -895,37 +900,52 @@
     .owner-property-card-grid {
       grid-template-columns: 80px minmax(0, 1fr);
       column-gap: var(--space-3);
-      row-gap: var(--space-4);
-      padding: var(--space-4);
+      row-gap: var(--space-5);
+      padding: var(--space-5) var(--space-4);
     }
 
     .owner-property-card-image {
       width: 80px;
+      height: 80px;
       border-radius: var(--radius-md);
     }
 
     .owner-property-card-title {
       font-size: 15px;
-      line-height: 1.2;
+      line-height: 1.3;
+      word-break: break-word;
     }
 
     .owner-property-card-location {
       font-size: 12px;
       gap: 4px;
       margin-top: 4px;
+      flex-wrap: wrap;
     }
 
     .owner-property-card-meta-row {
-      grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(80px, 0.7fr));
-      gap: var(--space-2);
+      grid-template-columns: 1fr;
+      gap: var(--space-3);
     }
 
     .owner-property-card-state-row {
-      gap: var(--space-1);
+      gap: var(--space-3);
+      grid-template-columns: 1fr;
     }
 
     .owner-property-card-actions {
-      gap: var(--space-1);
+      gap: var(--space-3);
+      flex-direction: column;
+    }
+
+    .owner-property-card-actions button,
+    .owner-property-card-actions div {
+      width: 100%;
+    }
+
+    .compact-metric {
+      padding: var(--space-4);
+      min-width: unset;
     }
   }
 
@@ -1494,6 +1514,52 @@
 
   .ds-pulse-ring {
     animation: ds-pulse-ring 1.5s ease-in-out infinite;
+  }
+
+  /* ─── VISUAL CONSISTENCY - SEMANTIC COLOR SYSTEM ─── */
+
+  /* Success / Active states - Green */
+  .badge-success,
+  .status-success,
+  .text-success {
+    color: #047857;
+    background-color: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.12);
+  }
+
+  /* Danger / Inactive states - Red */
+  .badge-danger,
+  .status-danger,
+  .text-danger {
+    color: #991b1b;
+    background-color: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.12);
+  }
+
+  /* Warning / Review states - Orange */
+  .badge-warning,
+  .status-warning,
+  .text-warning {
+    color: #b45309;
+    background-color: rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, 0.12);
+  }
+
+  /* Neutral / Default states - Gray/Gold */
+  .badge-neutral,
+  .status-neutral,
+  .text-neutral {
+    color: var(--color-text-secondary);
+    background-color: rgba(201, 168, 76, 0.06);
+    border-color: rgba(201, 168, 76, 0.12);
+  }
+
+  /* Pending / Review - Gold/Amber */
+  .badge-pending,
+  .status-pending {
+    color: #b45309;
+    background-color: rgba(201, 168, 76, 0.06);
+    border-color: rgba(201, 168, 76, 0.12);
   }
 
   /* ─── PREMIUM UI POLISH ─── */

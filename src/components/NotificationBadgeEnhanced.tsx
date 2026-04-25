@@ -195,21 +195,22 @@ export function NotificationBadgeEnhanced() {
 
       {/* ✅ DROPDOWN PANEL */}
       {isOpen && (
-        <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-slate-950">
+        <div className="absolute right-0 top-full mt-2 z-50 w-96 max-w-[calc(100vw-16px)] overflow-hidden rounded-2xl border border-slate-200/50 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-950 transition-all duration-200 animate-in fade-in slide-in-from-top-2">
           {/* Header */}
-          <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10">
-            <div className="flex items-center justify-between">
+          <div className="border-b border-slate-200/30 px-5 py-4 dark:border-white/5">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                <p className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
                   Notifications
                 </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
                   {label} unread
                 </p>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"
+                title="Close notifications"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -219,48 +220,52 @@ export function NotificationBadgeEnhanced() {
           {/* Notifications List */}
           <div className="max-h-96 overflow-y-auto">
             {loading && recentNotifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                <div className="inline-flex h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-gold dark:border-slate-600 dark:border-t-gold mb-2" />
-                <p>Loading notifications...</p>
+              <div className="px-5 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                <div className="inline-flex h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-gold dark:border-slate-600 dark:border-t-gold mb-3" />
+                <p className="font-medium">Loading notifications...</p>
               </div>
             ) : recentNotifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-                <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                <p>No notifications yet</p>
+              <div className="px-5 py-12 text-center">
+                <Bell className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  No notifications yet
+                </p>
               </div>
             ) : (
-              recentNotifications.map((notification) => {
+              recentNotifications.map((notification, index) => {
                 const isMarking = markingIds.has(notification.id);
                 return (
                   <button
                     key={notification.id}
                     onClick={() => handleNotificationClick(notification.id)}
                     disabled={isMarking}
-                    className={`w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:hover:bg-slate-800/50`}
+                    className={`w-full border-b border-slate-100/50 px-5 py-4 text-left transition-all hover:bg-slate-50/80 disabled:opacity-50 dark:border-white/5 dark:hover:bg-slate-800/40 ${
+                      index === recentNotifications.length - 1 ? 'border-b-0' : ''
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 leading-snug">
                           {notification.title}
                         </p>
-                        <p className="mt-0.5 truncate text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+                        <p className="mt-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-400">
                           {notification.message}
                         </p>
                       </div>
-                      <div className="flex flex-col items-end gap-2 pt-0.5">
-                        <p className="shrink-0 text-[10px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                      <div className="flex flex-col items-end gap-2 pt-0.5 flex-shrink-0">
+                        <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
                           {formatNotificationTime(notification.createdAt)}
                         </p>
                         {!notification.isRead && (
                           <div
-                            className="h-2 w-2 rounded-full bg-gold"
-                            title="Unread"
+                            className="h-2 w-2 rounded-full bg-gold shadow-sm"
+                            title="Unread notification"
                           />
                         )}
                       </div>
                     </div>
                     {isMarking && (
-                      <p className="mt-1 text-[10px] text-slate-400">
+                      <p className="mt-2 text-[10px] font-medium text-slate-400 dark:text-slate-500">
                         Marking as read...
                       </p>
                     )}
@@ -272,13 +277,13 @@ export function NotificationBadgeEnhanced() {
 
           {/* Footer - View All Link */}
           {notifications.length > 5 && (
-            <div className="border-t border-slate-100 px-4 py-2.5 dark:border-white/10">
+            <div className="border-t border-slate-100/50 px-5 py-3.5 dark:border-white/5 bg-slate-50/30 dark:bg-slate-900/20">
               <button
                 onClick={() => {
                   setIsOpen(false);
                   navigate("/notifications");
                 }}
-                className="flex w-full items-center justify-center gap-2 text-xs font-semibold text-gold hover:text-gold/80 transition"
+                className="flex w-full items-center justify-center gap-2 text-xs font-semibold text-gold hover:text-gold/90 transition-colors py-1"
               >
                 View all notifications
                 <ArrowRight className="h-3 w-3" />
