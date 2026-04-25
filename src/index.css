@@ -400,9 +400,9 @@
     font-weight: 700;
     color: var(--color-text-primary);
     line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
 
   /* Compact badge in property cards */
