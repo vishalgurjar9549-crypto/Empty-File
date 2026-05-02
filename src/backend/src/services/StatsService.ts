@@ -13,42 +13,36 @@ export class StatsService {
 
   async getPlatformStats(): Promise<PlatformStats> {
     try {
-      // ✅ SAFE OPTIMIZATION: Use Prisma Promise.all() for parallel queries
-      // This achieves same performance as raw SQL with proper Prisma error handling
-      const [totalProperties, distinctCities, distinctOwners] = await Promise.all([
-        // Count approved and active properties
-        this.prisma.room.count({
-          where: {
-            isActive: true,
-            reviewStatus: ReviewStatus.APPROVED,
-          },
-        }),
-        // Get distinct cities with approved properties
-        this.prisma.room.findMany({
-          where: {
-            isActive: true,
-            reviewStatus: ReviewStatus.APPROVED,
-          },
-          distinct: ['city'],
-          select: {
-            city: true,
-          },
-        }),
-        // Get distinct owners with approved properties
-        this.prisma.room.findMany({
-          where: {
-            isActive: true,
-            reviewStatus: ReviewStatus.APPROVED,
-          },
-          distinct: ['ownerId'],
-          select: {
-            ownerId: true,
-          },
-        }),
-      ]);
+      const [stats] = await this.prisma.$queryRaw<PlatformStats[]>`
+        WITH grouped_stats AS (
+          SELECT
+            GROUPING(city) AS city_grouped,
+            GROUPING("ownerId") AS owner_grouped,
+            COUNT(*)::int AS row_count
+          FROM "Room"
+          WHERE "isActive" = true
+            AND "reviewStatus" = ${ReviewStatus.APPROVED}::"ReviewStatus"
+          GROUP BY GROUPING SETS ((), (city), ("ownerId"))
+        )
+        SELECT
+          COALESCE(
+            MAX(row_count) FILTER (
+              WHERE city_grouped = 1 AND owner_grouped = 1
+            ),
+            0
+          )::int AS "totalProperties",
+          COUNT(*) FILTER (
+            WHERE city_grouped = 0 AND owner_grouped = 1
+          )::int AS "totalCities",
+          COUNT(*) FILTER (
+            WHERE city_grouped = 1 AND owner_grouped = 0
+          )::int AS "totalOwners"
+        FROM grouped_stats
+      `;
 
-      const totalCities = distinctCities.length;
-      const totalOwners = distinctOwners.length;
+      const totalProperties = stats?.totalProperties ?? 0;
+      const totalCities = stats?.totalCities ?? 0;
+      const totalOwners = stats?.totalOwners ?? 0;
 
       logger.info('Platform stats retrieved successfully', {
         totalProperties,

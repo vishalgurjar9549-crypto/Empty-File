@@ -14,8 +14,6 @@ export interface RoomDemandSummary {
   weeklyContacts: number;
 }
 
-const CONTACT_EVENT_TYPES = [EventType.CONTACT_UNLOCK, EventType.CONTACT_ACCESS];
-
 export class DemandService {
   private prisma: PrismaClient;
 
@@ -53,43 +51,43 @@ export class DemandService {
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
     const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000);
 
-    const [totalViews, totalContacts, todayViews, todayContacts] =
-      await Promise.all([
-        this.prisma.event.count({
-          where: {
-            propertyId,
-            type: EventType.PROPERTY_VIEW,
-            createdAt: { gte: sevenDaysAgo },
-          },
-        }),
-        this.prisma.event.count({
-          where: {
-            propertyId,
-            type: { in: CONTACT_EVENT_TYPES },
-            createdAt: { gte: sevenDaysAgo },
-          },
-        }),
-        this.prisma.event.count({
-          where: {
-            propertyId,
-            type: EventType.PROPERTY_VIEW,
-            createdAt: { gte: twentyFourHoursAgo },
-          },
-        }),
-        this.prisma.event.count({
-          where: {
-            propertyId,
-            type: { in: CONTACT_EVENT_TYPES },
-            createdAt: { gte: twentyFourHoursAgo },
-          },
-        }),
-      ]);
+    const [stats] = await this.prisma.$queryRaw<DemandStats[]>`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE type = ${EventType.PROPERTY_VIEW}::"EventType"
+        )::int AS "totalViews",
+        COUNT(*) FILTER (
+          WHERE type IN (
+            ${EventType.CONTACT_UNLOCK}::"EventType",
+            ${EventType.CONTACT_ACCESS}::"EventType"
+          )
+        )::int AS "totalContacts",
+        COUNT(*) FILTER (
+          WHERE type = ${EventType.PROPERTY_VIEW}::"EventType"
+            AND "createdAt" >= ${twentyFourHoursAgo}
+        )::int AS "todayViews",
+        COUNT(*) FILTER (
+          WHERE type IN (
+            ${EventType.CONTACT_UNLOCK}::"EventType",
+            ${EventType.CONTACT_ACCESS}::"EventType"
+          )
+            AND "createdAt" >= ${twentyFourHoursAgo}
+        )::int AS "todayContacts"
+      FROM events
+      WHERE "propertyId" = ${propertyId}
+        AND "createdAt" >= ${sevenDaysAgo}
+        AND type IN (
+          ${EventType.PROPERTY_VIEW}::"EventType",
+          ${EventType.CONTACT_UNLOCK}::"EventType",
+          ${EventType.CONTACT_ACCESS}::"EventType"
+        )
+    `;
 
     return {
-      totalViews,
-      totalContacts,
-      todayViews,
-      todayContacts,
+      totalViews: stats?.totalViews ?? 0,
+      totalContacts: stats?.totalContacts ?? 0,
+      todayViews: stats?.todayViews ?? 0,
+      todayContacts: stats?.todayContacts ?? 0,
     };
   }
 
@@ -112,43 +110,44 @@ export class DemandService {
     try {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      // ✅ SAFE OPTIMIZATION: Use Prisma groupBy for efficient aggregation
-      // This achieves good performance with proper Prisma error handling
-      const groupedCounts = await this.prisma.event.groupBy({
-        by: ['propertyId', 'type'],
-        where: {
-          propertyId: { in: uniqueIds },
-          createdAt: { gte: sevenDaysAgo },
-          type: {
-            in: [EventType.PROPERTY_VIEW, ...CONTACT_EVENT_TYPES],
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      });
+      const groupedCounts = await this.prisma.$queryRaw<
+        Array<{
+          propertyId: string;
+          weeklyViews: number;
+          weeklyContacts: number;
+        }>
+      >`
+        SELECT
+          "propertyId",
+          COUNT(*) FILTER (
+            WHERE type = ${EventType.PROPERTY_VIEW}::"EventType"
+          )::int AS "weeklyViews",
+          COUNT(*) FILTER (
+            WHERE type IN (
+              ${EventType.CONTACT_UNLOCK}::"EventType",
+              ${EventType.CONTACT_ACCESS}::"EventType"
+            )
+          )::int AS "weeklyContacts"
+        FROM events
+        WHERE "propertyId" IN (${Prisma.join(uniqueIds)})
+          AND "createdAt" >= ${sevenDaysAgo}
+          AND type IN (
+            ${EventType.PROPERTY_VIEW}::"EventType",
+            ${EventType.CONTACT_UNLOCK}::"EventType",
+            ${EventType.CONTACT_ACCESS}::"EventType"
+          )
+        GROUP BY "propertyId"
+      `;
 
-      // Aggregate counts by propertyId and type
       groupedCounts.forEach((row) => {
         if (!row.propertyId) {
           return;
         }
 
-        const current = demandMap.get(row.propertyId) || {
-          weeklyViews: 0,
-          weeklyContacts: 0,
-        };
-
-        if (row.type === EventType.PROPERTY_VIEW) {
-          current.weeklyViews += row._count._all;
-        } else if (
-          row.type === EventType.CONTACT_UNLOCK ||
-          row.type === EventType.CONTACT_ACCESS
-        ) {
-          current.weeklyContacts += row._count._all;
-        }
-
-        demandMap.set(row.propertyId, current);
+        demandMap.set(row.propertyId, {
+          weeklyViews: row.weeklyViews,
+          weeklyContacts: row.weeklyContacts,
+        });
       });
 
       return demandMap;

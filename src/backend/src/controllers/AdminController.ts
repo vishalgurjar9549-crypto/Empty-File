@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Prisma, Role } from "@prisma/client";
+import { Prisma, ReviewStatus, Role } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { getPrismaClient } from "../utils/prisma";
 import { logger } from "../utils/logger";
@@ -34,40 +34,62 @@ export class AdminController {
    */
   async getStats(req: Request, res: Response) {
     try {
-      // Use Promise.all for parallel queries with correct reviewStatus field
-      const [totalUsers, totalOwners, totalProperties, pendingApprovals, activeListings, rejected, suspended, needsCorrection] = await Promise.all([prisma.user.count(), prisma.user.count({
-        where: {
-          role: Role.OWNER
-        }
-      }), prisma.room.count(), prisma.room.count({
-        where: {
-          reviewStatus: "PENDING"
-        }
-      }), prisma.room.count({
-        where: {
-          reviewStatus: "APPROVED"
-        }
-      }), prisma.room.count({
-        where: {
-          reviewStatus: "REJECTED"
-        }
-      }), prisma.room.count({
-        where: {
-          reviewStatus: "REJECTED"
-        }
-      }), prisma.room.count({
-        where: {
-          reviewStatus: "NEEDS_CORRECTION"
-        }
-      })]);
+      const [statsRow] = await prisma.$queryRaw<
+        Array<{
+          totalUsers: number;
+          totalOwners: number;
+          totalProperties: number;
+          pendingApprovals: number;
+          activeListings: number;
+          rejected: number;
+          needsCorrection: number;
+        }>
+      >`
+        WITH user_stats AS (
+          SELECT
+            COUNT(*)::int AS "totalUsers",
+            COUNT(*) FILTER (
+              WHERE role = ${Role.OWNER}::"Role"
+            )::int AS "totalOwners"
+          FROM "User"
+        ),
+        room_stats AS (
+          SELECT
+            COUNT(*)::int AS "totalProperties",
+            COUNT(*) FILTER (
+              WHERE "reviewStatus" = ${ReviewStatus.PENDING}::"ReviewStatus"
+            )::int AS "pendingApprovals",
+            COUNT(*) FILTER (
+              WHERE "reviewStatus" = ${ReviewStatus.APPROVED}::"ReviewStatus"
+            )::int AS "activeListings",
+            COUNT(*) FILTER (
+              WHERE "reviewStatus" = ${ReviewStatus.REJECTED}::"ReviewStatus"
+            )::int AS rejected,
+            COUNT(*) FILTER (
+              WHERE "reviewStatus" = ${ReviewStatus.NEEDS_CORRECTION}::"ReviewStatus"
+            )::int AS "needsCorrection"
+          FROM "Room"
+        )
+        SELECT
+          us."totalUsers",
+          us."totalOwners",
+          rs."totalProperties",
+          rs."pendingApprovals",
+          rs."activeListings",
+          rs.rejected,
+          rs."needsCorrection"
+        FROM user_stats us
+        CROSS JOIN room_stats rs
+      `;
+
       const stats = {
-        totalUsers,
-        totalOwners,
-        totalProperties,
-        pendingApprovals,
-        activeListings,
-        rejected,
-        needsCorrection,
+        totalUsers: statsRow?.totalUsers ?? 0,
+        totalOwners: statsRow?.totalOwners ?? 0,
+        totalProperties: statsRow?.totalProperties ?? 0,
+        pendingApprovals: statsRow?.pendingApprovals ?? 0,
+        activeListings: statsRow?.activeListings ?? 0,
+        rejected: statsRow?.rejected ?? 0,
+        needsCorrection: statsRow?.needsCorrection ?? 0,
         totalBookings: 0
       };
       logger.info("Admin stats fetched", {
