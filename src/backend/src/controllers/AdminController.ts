@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { getPrismaClient } from "../utils/prisma";
 import { logger } from "../utils/logger";
 import { getCacheService } from "../services/CacheService";
+import { PropertyReviewTokenService } from "../services/PropertyReviewTokenService";
 
 // FIXED: Use singleton instead of new PrismaClient()
 const prisma = getPrismaClient();
@@ -24,6 +25,7 @@ export class AdminController {
     this.trackContactAttempt = this.trackContactAttempt.bind(this);
     this.trackOwnerLogin = this.trackOwnerLogin.bind(this);
     this.trackPropertyUpdate = this.trackPropertyUpdate.bind(this);
+    this.generateReviewToken = this.generateReviewToken.bind(this);
   }
 
   /**
@@ -859,6 +861,104 @@ export class AdminController {
       res.status(500).json({
         success: false,
         message: 'Failed to track property update'
+      });
+    }
+  }
+
+  /**
+   * POST /api/admin/properties/:id/generate-review-token
+   * Generate a WhatsApp review token for property owner
+   *
+   * Admin endpoint that creates a secure token for property review.
+   * Token is used server-side for auto-login; WhatsApp link stays token-free.
+   *
+   * @returns { token, propertyId, expiresAt, url? }
+   */
+  async generateReviewToken(req: Request, res: Response) {
+    try {
+      const { id: propertyId } = req.params;
+      const adminId = (req as AuthRequest).user?.userId;
+
+      if (!propertyId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Property ID is required'
+        });
+      }
+
+      // 1. Fetch property to get owner info
+      const property = await prisma.room.findUnique({
+        where: { id: propertyId },
+        select: {
+          id: true,
+          title: true,
+          ownerId: true,
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true
+            }
+          }
+        }
+      });
+
+      if (!property) {
+        logger.warn('Admin attempted to generate token for non-existent property', {
+          propertyId,
+          adminId
+        });
+        return res.status(404).json({
+          success: false,
+          message: 'Property not found'
+        });
+      }
+
+      // 2. Generate token using PropertyReviewTokenService
+      const tokenData = await PropertyReviewTokenService.generateReviewToken(
+        propertyId,
+        property.ownerId,
+        5 // 5 minute expiry
+      );
+
+      // 3. Build response
+      const response = {
+        success: true,
+        data: {
+          token: tokenData.token,
+          propertyId: tokenData.propertyId,
+          propertyTitle: property.title,
+          ownerName: property.owner.name,
+          ownerEmail: property.owner.email,
+          ownerPhone: property.owner.phone,
+          expiresAt: tokenData.expiresAt,
+          expiresIn: Math.round(
+            (tokenData.expiresAt.getTime() - Date.now()) / 1000
+          ),
+          url: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/review/${propertyId}`
+        },
+        message: 'Review token generated successfully'
+      };
+
+      logger.info('Admin generated property review token', {
+        propertyId,
+        ownerId: property.ownerId,
+        ownerName: property.owner.name,
+        adminId,
+        expiresAt: tokenData.expiresAt
+      });
+
+      return res.json(response);
+    } catch (error: any) {
+      logger.error('Error generating property review token', {
+        propertyId: req.params.id,
+        error: error.message,
+        adminId: (req as AuthRequest).user?.userId
+      });
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to generate review token'
       });
     }
   }

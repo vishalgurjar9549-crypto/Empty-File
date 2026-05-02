@@ -41,6 +41,11 @@ export const authApi = {
     const response = await axiosInstance.post<ApiResponse<AuthResponse>>('/auth/login-phone', { phone });
     return response.data.data;
   },
+  // Auto-login owner from property review link
+  autoLoginByProperty: async (propertyId: string): Promise<AuthResponse> => {
+    const response = await axiosInstance.post<ApiResponse<AuthResponse>>('/auth/auto-login-by-property', { propertyId });
+    return response.data.data;
+  },
   // Request password reset via email
   requestPasswordReset: async (email: string): Promise<{ message: string }> => {
     const response = await axiosInstance.post<ApiResponse<{ message: string }>>('/auth/forgot-password', { email });

@@ -168,5 +168,5 @@ export const subscriptionApi = {
   trackConversionEvent,
   getVisibility: checkPropertyVisibility,
   checkAccess,
-  getSubscriptionByCity
+  getSubscriptionByCity,
 };

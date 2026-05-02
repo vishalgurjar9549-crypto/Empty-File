@@ -1,16 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Search,
-  MapPin,
-  Home,
-  Wallet,
-  ChevronDown,
-  Check,
-} from "lucide-react";
+import { Search, MapPin, Home, Wallet, ChevronDown, Check } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-// import { loadCities } from "../store/slices/metadata.slice";
-import { SEARCH_ROOM_TYPE_OPTIONS, SEARCH_BUDGET_OPTIONS } from "../constants/filterOptions";
+import {
+  SEARCH_ROOM_TYPE_OPTIONS,
+  SEARCH_BUDGET_OPTIONS,
+} from "../constants/filterOptions";
 
 const normalizeCityValue = (cityName: string) => cityName.trim().toLowerCase();
 
@@ -42,7 +37,9 @@ function SearchDropdown({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   const selectedLabel = useMemo(() => {
-    return options.find((option) => option.value === value)?.label || placeholder;
+    return (
+      options.find((option) => option.value === value)?.label || placeholder
+    );
   }, [options, value, placeholder]);
 
   useEffect(() => {
@@ -124,7 +121,7 @@ function SearchDropdown({
         <ul
           role="listbox"
           aria-label={label}
-          className="max-h-72 overflow-auto py-2"
+          className="max-h-[13rem] overflow-auto py-2"
         >
           <li>
             <button
@@ -209,7 +206,7 @@ function SearchableCitySelect({
 
     return options
       .filter((option) =>
-        option.label.toLowerCase().includes(query.toLowerCase())
+        option.label.toLowerCase().includes(query.toLowerCase()),
       )
       .slice(0, 100);
   }, [options, query]);
@@ -310,7 +307,7 @@ function SearchableCitySelect({
               if (e.key === "ArrowDown") {
                 e.preventDefault();
                 setHighlightedIndex((prev) =>
-                  Math.min(prev + 1, filteredOptions.length - 1)
+                  Math.min(prev + 1, filteredOptions.length - 1),
                 );
               }
 
@@ -347,16 +344,10 @@ function SearchableCitySelect({
               : "pointer-events-none opacity-0 scale-95 -translate-y-1"
           }`}
       >
-        <div className="border-b border-slate-200/70 dark:border-slate-800 px-4 py-3">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Search your city
-          </p>
-        </div>
-
         <ul
           role="listbox"
           aria-label={label}
-          className="max-h-80 overflow-auto py-2"
+          className="max-h-[13rem] overflow-auto py-2"
         >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => {
@@ -441,9 +432,9 @@ export function SearchBar() {
   };
 
   return (
-   <form
-  onSubmit={handleSearch}
-  className="w-full rounded-[2rem] p-[6px] sm:p-2
+    <form
+      onSubmit={handleSearch}
+      className="w-full rounded-[2rem] p-[6px] sm:p-2
   bg-white/60 dark:bg-slate-900/60
   backdrop-blur-xl
   border border-slate-200/70 dark:border-white
@@ -452,11 +443,11 @@ export function SearchBar() {
   hover:border-amber-300/40
   focus-within:border-amber-400/60
   focus-within:ring-4 focus-within:ring-amber-400/10"
->
+    >
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 sm:gap-4 items-stretch">
         <SearchableCitySelect
           id="search-city"
-          label="City"
+          label="Search your city"
           icon={<MapPin className="w-5 h-5" />}
           value={city}
           onChange={setCity}

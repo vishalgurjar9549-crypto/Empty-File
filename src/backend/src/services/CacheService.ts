@@ -33,8 +33,11 @@ export class CacheService {
    * Generate cache key from filters and pagination
    */
   static generateKey(filters: any): string {
-    // Create a stable hash from filter object
     const key = {
+      // ✅ ADD THESE TWO (CRITICAL FIX)
+      page: filters?.page || 1,
+      limit: filters?.limit || 20,
+
       city: filters?.city || "",
       roomType: filters?.roomType || "",
       roomTypes: filters?.roomTypes ? JSON.stringify(filters.roomTypes) : "",
@@ -43,10 +46,11 @@ export class CacheService {
       minPrice: filters?.minPrice || "",
       maxPrice: filters?.maxPrice || "",
       sort: filters?.sort || "latest",
+
+      // keep cursor also
       cursor: filters?.cursor || "",
     };
 
-    // Simple hash function (not cryptographic, just for unique keys)
     return JSON.stringify(key);
   }
 
@@ -81,7 +85,7 @@ export class CacheService {
 
     this.cache.set(key, entry);
     logger.debug(
-      `Cache SET for key: ${key.substring(0, 50)}... (TTL: ${ttl}ms)`
+      `Cache SET for key: ${key.substring(0, 50)}... (TTL: ${ttl}ms)`,
     );
   }
 

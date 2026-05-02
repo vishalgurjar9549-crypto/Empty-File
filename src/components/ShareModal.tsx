@@ -20,13 +20,14 @@ export function ShareModal({ isOpen, onClose, room }: ShareModalProps) {
 
   const shareUrl = room ? `${PUBLIC_SITE_URL}/og/property/${room.id}` : "";
 
+  // Use Unicode escape sequences for emoji to ensure UTF-8 compatibility
   const shareText = room
-    ? `🏡 Check out this room in ${room.city}
-₹${room.pricePerMonth.toLocaleString()}/month • ${room.roomType}
+    ? `\u{1F3E1} Check out this room in ${room.city}
+₹${room.pricePerMonth.toLocaleString()}/month \u{2022} ${room.roomType}
 
 No brokerage. Direct owner contact.
 
-👉 ${shareUrl}`
+\u{1F449} ${shareUrl}`
     : "";
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { getPrismaClient } from '../utils/prisma';
+import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
 
 /**
@@ -50,10 +50,7 @@ export interface TenantDashboardData {
   recentlyViewed: TenantDashboardRecentView[];
 }
 export class TenantDashboardService {
-  private prisma;
-  constructor(prismaClient?: any) {
-    this.prisma = prismaClient || getPrismaClient();
-  }
+  private prisma = prisma;
 
   /**
    * GET DASHBOARD — Aggregated endpoint

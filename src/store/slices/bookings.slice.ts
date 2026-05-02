@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { bookingsApi } from '../../api/bookings.api';
+import { bookingService } from '../../services';
 import { Booking, CreateBookingInput, UpdateBookingStatusInput, PaginationMeta } from '../../types/api.types';
 import { showToast } from './ui.slice';
 interface BookingsState {
@@ -27,7 +27,7 @@ export const createBooking = createAsyncThunk('bookings/createBooking', async (d
       idempotencyKey,
       ...bookingData
     } = data;
-    const booking = await bookingsApi.createBooking(bookingData, idempotencyKey);
+    const booking = await bookingService.createBooking(bookingData, idempotencyKey);
     dispatch(showToast({
       message: 'Booking request sent successfully!',
       type: 'success'
@@ -52,7 +52,7 @@ export const fetchTenantBookings = createAsyncThunk('bookings/fetchTenantBooking
   rejectWithValue
 }) => {
   try {
-    const response = await bookingsApi.getTenantBookings(page, limit);
+    const response = await bookingService.getTenantBookings(page, limit);
     return response;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch bookings';
@@ -69,7 +69,7 @@ export const fetchOwnerBookings = createAsyncThunk('bookings/fetchOwnerBookings'
   rejectWithValue
 }) => {
   try {
-    const response = await bookingsApi.getOwnerBookings(page, limit);
+    const response = await bookingService.getOwnerBookings(page, limit);
     return response;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch bookings';
@@ -87,7 +87,7 @@ export const updateBookingStatus = createAsyncThunk('bookings/updateBookingStatu
   rejectWithValue
 }) => {
   try {
-    const booking = await bookingsApi.updateBookingStatus(id, data);
+    const booking = await bookingService.updateBookingStatus(id, data);
     dispatch(showToast({
       message: 'Booking updated successfully!',
       type: 'success'

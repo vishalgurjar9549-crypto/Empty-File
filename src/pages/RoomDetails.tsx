@@ -69,6 +69,14 @@ import { RoomDetailsSkeleton } from "../components/ui/RoomDetailsSkeleton";
 import { PropertyImageGallery } from "../components/PropertyImageGallery";
 import { getRoomImage } from "../utils/propertyUtils";
 import UnlockConfirmModal from "../components/UnlockConfirmModal";
+import {
+  AMENITIES_LIST,
+  getAmenitiesByCategory,
+  CATEGORY_LABELS,
+  AMENITY_CATEGORIES,
+  type AmenityCategoryKey,
+} from "../constants/amenities.config";
+import { AmenitiesModal } from "../components/AmenitiesModal";
 
 const PUBLIC_SITE_URL = "https://homilivo.com";
 const DEFAULT_OG_IMAGE = `${PUBLIC_SITE_URL}/og-image.png`;
@@ -116,6 +124,68 @@ const setMetaTag = (
   }
 
   element.setAttribute("content", content);
+};
+
+// Helper function to get amenity details by ID
+const getAmenityDetails = (amenityId: string) => {
+  return AMENITIES_LIST.find((a) => a.id === amenityId);
+};
+
+// Helper to map icon names from config to lucide components
+const getIconForAmenity = (iconName?: string) => {
+  const iconComponentMap: Record<string, any> = {
+    Wifi: Wifi,
+    Wind: Wind,
+    Zap: Zap,
+    Shield: Shield,
+    Check: Check,
+    Lightbulb: Check,
+    Bath: Check,
+    Droplets: Check,
+    Sofa: Check,
+    Home: Check,
+    Box: Check,
+    Laptop: Check,
+    Utensils: Check,
+    Users: Check,
+    Dumbbell: Check,
+    TreePine: Check,
+    Coffee: Coffee,
+    Car: Car,
+    Tv: Tv,
+  };
+  return iconComponentMap[iconName || "Check"] || Check;
+};
+
+// Helper to group room amenities by category
+const groupAmenitiesByCategory = (amenityIds: string[]): Record<AmenityCategoryKey, string[]> => {
+  const grouped: Record<AmenityCategoryKey, string[]> = {
+    [AMENITY_CATEGORIES.ESSENTIALS]: [],
+    [AMENITY_CATEGORIES.ROOM_FEATURES]: [],
+    [AMENITY_CATEGORIES.KITCHEN]: [],
+    [AMENITY_CATEGORIES.SAFETY]: [],
+    [AMENITY_CATEGORIES.CONVENIENCE]: [],
+  };
+
+  amenityIds.forEach((id) => {
+    const amenity = getAmenityDetails(id);
+    if (amenity && grouped[amenity.category]) {
+      grouped[amenity.category].push(id);
+    }
+  });
+
+  return grouped;
+};
+
+// Helper to get top categories (1-2 most populated)
+const getTopCategories = (
+  groupedAmenities: Record<AmenityCategoryKey, string[]>
+): AmenityCategoryKey[] => {
+  return (Object.entries(groupedAmenities) as [AmenityCategoryKey, string[]][])
+    .filter(([_, ids]) => ids.length > 0)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 2)
+    .map(([category]) => category);
 };
 
 const iconMap: Record<string, any> = {
@@ -184,6 +254,8 @@ export function RoomDetails() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isUnlockConfirmOpen, setIsUnlockConfirmOpen] = useState(false);
+  const [isShowAllAmenitiesOpen, setIsShowAllAmenitiesOpen] = useState(false);
+  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   
   const [contactData, setContactData] =
     useState<UnlockContactResponse | null>(null);
@@ -712,16 +784,34 @@ No brokerage. Direct owner contact.
           {/* LEFT */}
           <div className="lg:col-span-8 space-y-8">
             {/* Hero */}
-            <div className="pb-8 border-b border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="pb-8 border-b border-slate-200 dark:border-slate-800 space-y-4">
               <div className="flex justify-between items-start gap-4">
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-                  {room.title}
-                </h1>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight mb-2.5">
+                    {room.title}
+                  </h1>
+                  
+                  {/* Condensed Meta Info Row */}
+                  <div className="flex flex-wrap items-center gap-3 text-sm mb-4">
+                    <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-medium">
+                      <MapPin className="w-4 h-4 text-gold flex-shrink-0" />
+                      <span className="truncate">{room.location}</span>
+                      {room.landmark && <span className="text-slate-500 dark:text-slate-500">• {room.landmark}</span>}
+                    </span>
 
-                <div className="hidden md:flex gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-medium">
+                      <Star className="w-4 h-4 text-gold fill-gold flex-shrink-0" />
+                      <span className="text-slate-900 dark:text-white font-bold">{room.rating}</span>
+                      <span className="text-slate-500 dark:text-slate-400">({room.reviewsCount})</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="hidden md:flex gap-2 flex-shrink-0">
                   <button
                     onClick={handleShare}
-                    className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
+                    className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    title="Share"
                   >
                     <Share2 className="w-5 h-5" />
                   </button>
@@ -729,11 +819,12 @@ No brokerage. Direct owner contact.
                   <button
                     onClick={handleToggleFavorite}
                     disabled={isTogglingFavorite}
-                    className={`p-2.5 rounded-full transition-colors ${
+                    className={`p-2.5 rounded-full transition-all duration-200 ${
                       isFavorited
                         ? "bg-red-100 dark:bg-red-900/30 text-red-500"
                         : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-red-500"
                     }`}
+                    title={isFavorited ? "Remove from favorites" : "Add to favorites"}
                   >
                     <Heart
                       className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`}
@@ -742,26 +833,8 @@ No brokerage. Direct owner contact.
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 text-slate-600 dark:text-slate-400">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <MapPin className="w-4 h-4 text-gold" />
-                  {room.location}, {room.landmark}
-                </span>
-
-                <span className="w-1 h-1 bg-slate-300 rounded-full hidden sm:block" />
-
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Star className="w-4 h-4 text-gold fill-gold" />
-                  <span className="text-slate-900 dark:text-white font-bold">
-                    {room.rating}
-                  </span>
-                  <span className="underline underline-offset-4">
-                    ({room.reviewsCount} reviews)
-                  </span>
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
+              {/* Property Type & Ideal For Badges */}
+              <div className="flex flex-wrap gap-2">
                 <span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg text-xs font-semibold uppercase tracking-wide border border-slate-200 dark:border-slate-700">
                   {room.roomType}
                 </span>
@@ -777,35 +850,100 @@ No brokerage. Direct owner contact.
               title="About this place"
               subtitle="Overview and property details"
             >
-              <p className="text-base md:text-[15px] text-slate-600 dark:text-slate-300 leading-7">
-                {room.description}
-              </p>
+              <div className="space-y-3">
+                <p className={`text-base md:text-[15px] text-slate-600 dark:text-slate-300 leading-7 transition-all ${
+                  isAboutExpanded ? '' : 'line-clamp-4'
+                }`}>
+                  {room.description}
+                </p>
+                
+                {/* Show "Read more" button if description is long */}
+                {room.description.split('\n').length > 4 || room.description.length > 300 ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                    className="text-sm font-semibold text-gold hover:text-amber-600 dark:hover:text-amber-400 transition-colors flex items-center gap-1.5"
+                  >
+                    {isAboutExpanded ? 'Show less' : 'Read more'}
+                    <ChevronRight className={`w-4 h-4 transition-transform ${isAboutExpanded ? 'rotate-90' : ''}`} />
+                  </button>
+                ) : null}
+              </div>
             </SectionCard>
 
             {/* Amenities */}
             <SectionCard
               title="Amenities"
-              subtitle="What this property offers"
+              subtitle={`What this property offers (${room.amenities.length} total)`}
             >
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {room.amenities.map((amenity, i) => {
-                  const Icon = iconMap[amenity] || Check;
+              {/* Amenities Grid - Show only top 1-2 categories initially */}
+              <div className="space-y-5">
+                {/* Grouped Amenities */}
+                {(() => {
+                  const grouped = groupAmenitiesByCategory(room.amenities);
+                  const topCategories = getTopCategories(grouped);
 
                   return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 px-4 py-3"
-                    >
-                      <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                        <Icon className="w-4 h-4 text-gold" />
-                      </div>
-                      <span className="font-medium text-sm text-slate-700 dark:text-slate-200">
-                        {amenity}
-                      </span>
+                    <div className="space-y-6">
+                      {topCategories.map((categoryKey) => {
+                        const amenityIds = grouped[categoryKey];
+                        if (amenityIds.length === 0) return null;
+
+                        return (
+                          <div key={categoryKey} className="space-y-3">
+                            {/* Category Title */}
+                            <div>
+                              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-3">
+                                {CATEGORY_LABELS[categoryKey]} ({amenityIds.length})
+                              </h4>
+
+                              {/* Amenities Grid */}
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {amenityIds.map((amenityId, i) => {
+                                  const amenity = getAmenityDetails(amenityId);
+                                  if (!amenity) return null;
+
+                                  const IconComponent = getIconForAmenity(amenity.icon);
+
+                                  return (
+                                    <div
+                                      key={`${categoryKey}-${i}`}
+                                      className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/60 px-3.5 py-3 transition-colors"
+                                      title={amenity.description}
+                                    >
+                                      <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex-shrink-0">
+                                        <IconComponent className="w-4 h-4 text-gold" />
+                                      </div>
+                                      <span className="font-medium text-sm text-slate-700 dark:text-slate-200 leading-tight">
+                                        {amenity.label}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
-                })}
+                })()}
+
+                {/* Show All Button - Only if more than 6 amenities */}
+                {room.amenities.length > 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsShowAllAmenitiesOpen(true)}
+                    className="w-full py-3 px-4 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-center gap-2"
+                  >
+                    Show all {room.amenities.length} amenities
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
+
+              {/* Show All Amenities Modal - Grouped by Category */}
+           
             </SectionCard>
 
             {/* Owner Contact */}
@@ -1050,72 +1188,91 @@ No brokerage. Direct owner contact.
           {/* RIGHT */}
           <div className="hidden lg:block lg:col-span-4">
             <div className="sticky top-28 space-y-5">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gold to-yellow-500" />
+              {/* Price Card - Enhanced Premium Look */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-md hover:shadow-lg transition-shadow relative overflow-hidden">
+                {/* Top gradient accent */}
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-gold via-yellow-400 to-gold" />
+                
+                {/* Corner accent */}
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-gradient-to-br from-gold/5 to-transparent rounded-full blur-xl" />
 
-                <div className="flex items-end gap-2 mb-6 mt-2">
-                  <span className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
-                    <span className="text-gold">₹</span>
-                    {room.pricePerMonth.toLocaleString()}
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400 font-medium mb-1.5">
-                    / month
-                  </span>
+                <div className="relative space-y-5">
+                  {/* Price Section */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+                      Monthly Price
+                    </p>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
+                        <span className="text-gold">₹</span>{room.pricePerMonth.toLocaleString()}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">
+                        / month
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Highlights - Improved Layout */}
+                  <div className="space-y-2.5 py-4 border-y border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-3 text-sm">
+                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-slate-300">Fully Furnished</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-slate-300">Security Included</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <span className="font-semibold text-slate-900 dark:text-white">Zero Brokerage</span>
+                    </div>
+                  </div>
+
+                  {/* CTA Button - Enhanced */}
+                  <div className="space-y-2.5">
+                    <Button
+                      onClick={handleBookNow}
+                      fullWidth
+                      size="lg"
+                      className="font-semibold"
+                    >
+                      Book a Visit
+                    </Button>
+
+                    <p className="text-center text-xs text-slate-500 dark:text-slate-400">
+                      ✓ Secure • Verified • No commitment
+                    </p>
+                  </div>
                 </div>
-
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Fully Furnished</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Security Included</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      Zero Brokerage
-                    </span>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleBookNow}
-                  fullWidth
-                  size="lg"
-                  className="mb-4"
-                >
-                  Book a Visit
-                </Button>
-
-                <p className="text-center text-xs text-slate-400">
-                  You won't be charged yet
-                </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5">
+              {/* Trust Badges Card - Enhanced */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm hover:shadow-md transition-shadow p-5">
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+                    <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/20 flex-shrink-0">
+                      <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">
                         Verified Listing
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Physically verified by our team
+                        Verified by our team
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <Clock className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+                    <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex-shrink-0">
+                      <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                        Fast Response
+                        Quick Response
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Owner typically replies in 2 hrs
+                        Replies typically in 2 hrs
                       </p>
                     </div>
                   </div>
@@ -1127,20 +1284,32 @@ No brokerage. Direct owner contact.
 
         {/* Reviews */}
         <section className="mt-16 pt-10 border-t border-slate-200 dark:border-slate-800">
-          <div className="max-w-5xl space-y-6">
+          <div className="max-w-5xl space-y-8">
+            {/* Section Header - Enhanced */}
             <div className="flex items-end justify-between gap-4 flex-wrap">
-              <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
-                  Reviews & Ratings
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                    Reviews & Ratings
+                  </h2>
+                  {statsState.loaded && statsState.stats && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                      <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                        {statsState.stats.averageRating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   See what previous tenants are saying about this property
                 </p>
               </div>
             </div>
 
-            {statsState.loaded && (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-6">
+            {/* Rating Summary Card - Enhanced */}
+            {statsState.loaded && statsState.stats && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-8">
                 <RatingSummary
                   averageRating={statsState.stats?.averageRating || 0}
                   totalReviews={statsState.stats?.totalReviews || 0}
@@ -1149,8 +1318,36 @@ No brokerage. Direct owner contact.
               </div>
             )}
 
+            {/* No Reviews State */}
+            {statsState.loaded && (!statsState.stats || statsState.stats.totalReviews === 0) && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20 p-8 text-center">
+                <div className="max-w-sm mx-auto">
+                  <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4">
+                    <Star className="w-6 h-6 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                    No reviews yet
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Be the first to review this property and help other users make informed decisions
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Write Review Section - Enhanced */}
             {authStatus === "AUTHENTICATED" && user && (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-6">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-8">
+                <div className="mb-5">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    {userReviewState.review ? "Your Review" : "Share Your Experience"}
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {userReviewState.review
+                      ? "You've already reviewed this property"
+                      : "Help other tenants by sharing your honest feedback"}
+                  </p>
+                </div>
                 <ReviewForm
                   roomId={id || ""}
                   isLoggedIn={authStatus === "AUTHENTICATED"}
@@ -1170,50 +1367,78 @@ No brokerage. Direct owner contact.
               </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-6">
-              <div className="mb-5">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {reviewsState.total === 0
-                    ? "No reviews yet"
-                    : `${reviewsState.total} Reviews`}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Verified user experiences and ratings
-                </p>
+            {/* Login Prompt for Reviews */}
+            {authStatus !== "AUTHENTICATED" && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20 p-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                      Sign in to write a review
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Log in to share your experience and help the community
+                    </p>
+                  </div>
+                  <Link to={`/auth/login?from=/rooms/${id}`}>
+                    <Button size="sm" variant="primary">
+                      Sign In
+                    </Button>
+                  </Link>
+                </div>
               </div>
+            )}
 
-              <ReviewList
-                reviews={reviewsState.reviews}
-                total={reviewsState.total}
-                page={reviewsPage}
-                pages={reviewsState.pages}
-                loading={reviewsState.loading}
-                sort={reviewsSort}
-                onPageChange={(page) => {
-                  setReviewsPage(page);
-                  dispatch(
-                    fetchReviewsForRoom({
-                      roomId: id || "",
-                      page,
-                      limit: 10,
-                      sort: reviewsSort,
-                    })
-                  );
-                }}
-                onSortChange={(sort) => {
-                  setReviewsSort(sort);
-                  setReviewsPage(1);
-                  dispatch(
-                    fetchReviewsForRoom({
-                      roomId: id || "",
-                      page: 1,
-                      limit: 10,
-                      sort,
-                    })
-                  );
-                }}
-              />
-            </div>
+            {/* Reviews List - Enhanced */}
+            {(reviewsState.total > 0 || statsState.loaded) && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm p-5 md:p-8">
+                <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      {reviewsState.total === 0
+                        ? "No reviews yet"
+                        : `All Reviews (${reviewsState.total})`}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                      Verified user experiences and ratings
+                    </p>
+                  </div>
+                </div>
+
+                {reviewsState.total > 0 && (
+                  <ReviewList
+                    reviews={reviewsState.reviews}
+                    total={reviewsState.total}
+                    page={reviewsPage}
+                    pages={reviewsState.pages}
+                    loading={reviewsState.loading}
+                    sort={reviewsSort}
+                    onPageChange={(page) => {
+                      setReviewsPage(page);
+                      dispatch(
+                        fetchReviewsForRoom({
+                          roomId: id || "",
+                          page,
+                          limit: 10,
+                          sort: reviewsSort,
+                        })
+                      );
+                    }}
+                    onSortChange={(sort) => {
+                      setReviewsSort(sort);
+                      setReviewsPage(1);
+                      dispatch(
+                        fetchReviewsForRoom({
+                          roomId: id || "",
+                          page: 1,
+                          limit: 10,
+                          sort,
+                        })
+                      );
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1254,13 +1479,20 @@ No brokerage. Direct owner contact.
             <span className="text-gold">₹</span>
             {room.pricePerMonth.toLocaleString()}
           </p>
-          <p className="text-xs text-slate-500">per month</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">per month</p>
         </div>
 
-        <Button onClick={handleBookNow} size="md" className="px-6">
+        <Button onClick={handleBookNow} size="md" className="px-6 font-semibold">
           Book Visit
         </Button>
       </div>
+
+      <AmenitiesModal
+  isOpen={isShowAllAmenitiesOpen}
+  onClose={() => setIsShowAllAmenitiesOpen(false)}
+  amenities={room.amenities}
+  // theme={theme}
+/>
     </div>
   );
 }

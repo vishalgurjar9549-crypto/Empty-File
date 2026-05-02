@@ -4,6 +4,7 @@ import { Room, RoomFilters, CreateRoomInput, UpdateRoomInput, PaginationMeta } f
 import { showToast } from "./ui.slice";
 import { deduplicateAndMerge, countDuplicates } from "../../utils/roomDeduplicate";
 import { roomsRequestTracker } from "../../utils/requestManagement";
+import { ownerService } from "../../services";
 type RejectedValue = string | { code?: string; message: string };
 interface RoomsState {
   rooms: Room[];
@@ -35,10 +36,32 @@ export const fetchRooms = createAsyncThunk("rooms/fetchRooms", async (filters: R
   rejectWithValue
 }) => {
   try {
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Thunk] fetchRooms called with filters:`, filters);
+    }
+    
     const response = await roomsApi.getRooms(filters);
+    
+    if (process.env.NODE_ENV === "development") {
+      // ✅ DEBUG: Show what room types are in the response
+      const roomTypesInResponse = [...new Set(response.rooms.map(r => r.roomType))];
+      console.log(`[Thunk] fetchRooms API response:`, {
+        roomsCount: response.rooms.length,
+        firstRoomId: response.rooms[0]?.id,
+        requestedRoomTypes: filters?.roomTypes,
+        actualRoomTypesInResponse: roomTypesInResponse,
+        isFiltered: filters?.roomTypes ? roomTypesInResponse.length <= filters.roomTypes.length : null,
+        meta: response.meta,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     return response;
   } catch (error: any) {
     const message = error.response?.data?.message || "Failed to fetch rooms";
+    if (process.env.NODE_ENV === "development") {
+      console.error(`[Thunk] fetchRooms error:`, message, error);
+    }
     return rejectWithValue(message);
   }
 });
@@ -59,6 +82,9 @@ export const createRoom = createAsyncThunk("rooms/createRoom", async (data: Crea
 }) => {
   try {
     const room = await roomsApi.createRoom(data);
+    // ✅ NEW: Clear owner rooms cache after successful property creation
+    // This ensures next fetchOwnerRooms() call gets fresh data instead of stale cache
+    ownerService.clearOwnerRoomsCache();
     dispatch(showToast({
       message: "Property added successfully!",
       type: "success"
@@ -261,11 +287,34 @@ const roomsSlice = createSlice({
       state.error = null;
     }).addCase(fetchRooms.fulfilled, (state, action) => {
       state.loading.fetch = false;
+      const oldLength = state.rooms.length;
+      const newLength = action.payload.rooms.length;
+      
+      // ✅ CRITICAL: Replace previous rooms list with NEW array reference
+      // This ensures React detects the state change and re-renders
       state.rooms = action.payload.rooms;
       state.meta = action.payload.meta;
+      
+      // Verify replacement (development only)
+      if (process.env.NODE_ENV === "development") {
+        // ✅ DEBUG: Show what room types are being stored
+        const roomTypesInStorage = [...new Set(state.rooms.map(r => r.roomType))];
+        console.log(`[Reducer] fetchRooms.fulfilled:`, {
+          oldLength,
+          newLength,
+          sameReference: oldLength === newLength && action.payload.rooms === state.rooms,
+          newArrayRef: state.rooms === action.payload.rooms,
+          firstRoomId: state.rooms[0]?.id,
+          roomTypesStored: roomTypesInStorage,
+          timestamp: new Date().toISOString()
+        });
+      }
     }).addCase(fetchRooms.rejected, (state, action) => {
       state.loading.fetch = false;
       state.error = action.payload as string;
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[Reducer] fetchRooms.rejected:`, action.payload);
+      }
     });
 
     // ✅ FIX: Add fetchRoomById cases (MISSING BEFORE)

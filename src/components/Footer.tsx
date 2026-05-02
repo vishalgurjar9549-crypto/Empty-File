@@ -43,7 +43,7 @@ export default function Footer() {
               to="/"
               className="inline-flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white"
             >
-              <span className={gold}>Hom</span>ilivo
+              <span className={gold}>Homi</span>livo
             </Link>
 
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-400">
@@ -65,8 +65,8 @@ export default function Footer() {
 
               <div className="flex items-center gap-3">
                 <Phone className="h-4 w-4 text-[#D4AF37]" />
-                <a href="tel:+919999999999" className={goldHover}>
-                  +91 99999 99999
+                <a href="tel:+918209595522" className={goldHover}>
+                  +91 82095 95522
                 </a>
               </div>
 
@@ -80,25 +80,25 @@ export default function Footer() {
             <div className="mt-6 flex items-center gap-3">
               {[
                 {
-                  href: "https://instagram.com",
+                  href: "https://www.instagram.com/homilivo",
                   icon: Instagram,
                   label: "Instagram",
                 },
-                {
-                  href: "https://facebook.com",
-                  icon: Facebook,
-                  label: "Facebook",
-                },
-                {
-                  href: "https://twitter.com",
-                  icon: Twitter,
-                  label: "Twitter",
-                },
-                {
-                  href: "https://linkedin.com",
-                  icon: Linkedin,
-                  label: "LinkedIn",
-                },
+                // {
+                //   href: "https://facebook.com",
+                //   icon: Facebook,
+                //   label: "Facebook",
+                // },
+                // {
+                //   href: "https://twitter.com",
+                //   icon: Twitter,
+                //   label: "Twitter",
+                // },
+                // {
+                //   href: "https://linkedin.com",
+                //   icon: Linkedin,
+                //   label: "LinkedIn",
+                // },
               ].map(({ href, icon: Icon, label }) => (
                 <a
                   key={label}
@@ -125,16 +125,16 @@ export default function Footer() {
                   About Us
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link to="/careers" className={goldHover}>
                   Careers
                 </Link>
-              </li>
-              <li>
+              </li> */}
+              {/* <li>
                 <Link to="/blogs" className={goldHover}>
                   Blogs
                 </Link>
-              </li>
+              </li> */}
               <li>
                 <Link to="/contact" className={goldHover}>
                   Contact
@@ -150,35 +150,35 @@ export default function Footer() {
             </h4>
             <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
               <li>
-                <Link to="/properties" className={goldHover}>
+                <Link to="/rooms" className={goldHover}>
                   Browse Properties
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link to="/cities" className={goldHover}>
                   Popular Cities
                 </Link>
-              </li>
-              <li>
+              </li> */}
+              {/* <li>
                 <Link to="/list-property" className={goldHover}>
                   List Your Property
                 </Link>
-              </li>
-               <li>
+              </li> */}
+               {/* <li>
                 <Link to="/list-property" className={goldHover}>
                   Affiliate Partner
                 </Link>
-              </li>
+              </li> */}
                <li>
-                <Link to="/list-property" className={goldHover}>
+                <Link to="/agent/register" className={goldHover}>
                   Become an agent
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link to="/offers" className={goldHover}>
                   Offers & Deals
                 </Link>
-              </li>
+              </li> */}
             </ul>
           </div>
 
@@ -188,11 +188,11 @@ export default function Footer() {
               Support
             </h4>
             <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-              <li>
+              {/* <li>
                 <Link to="/help-center" className={goldHover}>
                   Help Center
                 </Link>
-              </li>
+              </li> */}
               <li>
                 <Link to="/privacy-policy" className={goldHover}>
                   Privacy Policy
@@ -216,7 +216,7 @@ export default function Footer() {
         <div className="border-t border-slate-200 dark:border-slate-800 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-500">
           <p>© {new Date().getFullYear()} Homilivo. All rights reserved.</p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          {/* <div className="flex flex-wrap items-center justify-center gap-4">
             <Link to="/sitemap" className={goldHover}>
               Sitemap
             </Link>
@@ -226,7 +226,7 @@ export default function Footer() {
             <Link to="/accessibility" className={goldHover}>
               Accessibility
             </Link>
-          </div>
+          </div> */}
         </div>
       </div>
     </footer>

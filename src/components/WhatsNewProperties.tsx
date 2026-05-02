@@ -214,13 +214,13 @@ export function WhatsNewProperties() {
                       }}
                     />
 
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background:
-                          "linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.38), rgba(0,0,0,0.08))",
-                      }}
-                    />
+                   <div
+  className="absolute inset-0"
+  style={{
+    background:
+      "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.65) 45%, rgba(0,0,0,0.25) 75%, rgba(0,0,0,0.05) 100%)",
+  }}
+/>
 
                     <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/10 to-transparent" />
 
@@ -237,11 +237,27 @@ export function WhatsNewProperties() {
                         {item.badge}
                       </div>
 
-                      <h3 className="text-base sm:text-lg font-semibold text-white leading-tight line-clamp-2">
+                      <h3
+  className="
+    text-base sm:text-lg font-bold leading-tight line-clamp-2
+    tracking-wide
+  "
+  style={{
+    color: "#fff",
+    textShadow: "0 2px 12px rgba(0,0,0,0.85)",
+    letterSpacing: "0.3px",
+  }}
+>
                         {item.title}
                       </h3>
 
-                      <p className="text-xs sm:text-sm text-white/75 mt-2 line-clamp-2 max-w-[92%]">
+                    <p
+  className="text-xs sm:text-sm mt-2 line-clamp-2 max-w-[92%]"
+  style={{
+    color: "rgba(255,255,255,0.85)",
+    textShadow: "0 1px 8px rgba(0,0,0,0.6)",
+  }}
+>
                         {item.subtitle}
                       </p>
 

@@ -10,7 +10,7 @@ const trustItems = [
 export function Hero() {
    const gold = "rgba(212,175,55,0.9)";
   return (
-    <section className="relative overflow-visible py-12 md:py-16 lg:py-20">
+    <section className="relative overflow-visible ">
 
       {/* Background */}
       <div
@@ -33,7 +33,7 @@ export function Hero() {
       <div className="relative z-20 min-h-dvh md:min-h-[85vh] flex flex-col items-center justify-center px-4 text-center max-w-6xl mx-auto">
 
         {/* Badge */}
-        <div className="mb-6 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-md text-xs tracking-widest uppercase text-slate-600 dark:text-slate-300">
+        <div className="mb-6 px-4 rounded-full border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-md text-xs tracking-widest uppercase text-slate-600 dark:text-slate-300">
           Verified Homes • Trusted Owners
         </div>
 

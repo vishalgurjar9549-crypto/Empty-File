@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchAssignedProperties, fetchAssignedTenants, fetchNotifications, markNotificationAsRead, markAllNotificationsAsRead, createPropertyNote, updatePropertyNote, deletePropertyNote } from '../../store/slices/agent.slice';
 import { showToast } from '../../store/slices/ui.slice';
 import { Building, Users, Bell, MapPin, Calendar, Phone, Mail, CheckCircle, Clock, AlertCircle, RefreshCw, FileText, Plus, Edit2, Trash2 } from 'lucide-react';
 import { PropertyNoteModal } from '../../components/agent/PropertyNoteModal';
 import { DeleteNoteConfirmModal } from '../../components/agent/DeleteNoteConfirmModal';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { GridSkeleton, ListItemSkeleton } from '../../components/ui/Skeletons';
 import { AgentNote, AgentPropertyView } from '../../types/agent.types';
 export function AgentDashboard() {
   const dispatch = useAppDispatch();
@@ -213,9 +215,9 @@ export function AgentDashboard() {
         isSubmitting={isSubmitting}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
         {/* Header */}
-        <header className="mb-6 md:mb-8">
+        <header className="mb-2">
           <h1 className="text-2xl md:text-3xl font-bold text-navy dark:text-white font-playfair">
             Agent Dashboard
           </h1>

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { loadAmenities } from '../store/slices/metadata.slice';
+import { loadAmenities, loadCities } from '../store/slices/metadata.slice';
 import { fetchPlatformStats } from '../store/slices/stats.slice';
 
 // Prevent multiple initializations
@@ -24,7 +24,7 @@ let hasInitialized = false;
 export function useInitializeAppData() {
   const dispatch = useAppDispatch();
   const initCountRef = useRef(0);
-  const { amenities } = useAppSelector(state => state.metadata);
+  const { amenities, cities } = useAppSelector(state => state.metadata);
   const { platform: stats } = useAppSelector(state => state.stats);
 
   useEffect(() => {
@@ -42,13 +42,19 @@ export function useInitializeAppData() {
     // - EditPropertyModal (on first open)
     // This prevents unnecessary API calls for users who never edit properties
 
-    // ✅ STEP 1: Load amenities (used on Pricing page, property listings)
+    // ✅ STEP 1: Load cities (displayed on homepage, needed for city selection)
+    if (cities.length === 0) {
+      console.debug('[App Init] Loading cities');
+      dispatch(loadCities());
+    }
+
+    // ✅ STEP 2: Load amenities (used on Pricing page, property listings)
     if (amenities.length === 0) {
       console.debug('[App Init] Loading amenities');
       dispatch(loadAmenities());
     }
 
-    // ✅ STEP 2: Load platform stats (displayed on homepage)
+    // ✅ STEP 3: Load platform stats (displayed on homepage)
     if (!stats) {
       console.debug('[App Init] Loading platform stats');
       dispatch(fetchPlatformStats());

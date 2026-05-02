@@ -2,14 +2,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  BarChart3,
   Home,
   Inbox,
-  IndianRupee,
   Plus,
   Send,
-  TrendingUp,
-  Users,
   X,
   MessageSquare,
   Clock,
@@ -27,15 +23,12 @@ import { fetchUnreadCount } from "../../store/slices/notifications.slice";
 import { toggleRoomStatus } from "../../store/slices/rooms.slice";
 import { updateBookingStatus } from "../../store/slices/bookings.slice";
 import { DashboardShell } from "../../components/dashboard/DashboardShell";
-import { StatCard } from "../../components/dashboard/StatCard";
 import { SectionCard } from "../../components/dashboard/SectionCard";
 import { EmptyState } from "../../components/dashboard/EmptyState";
 import { RecentActivity } from "../../components/dashboard/RecentActivity";
-// import { OwnerPropertyRow } from "../../components/dashboard/OwnerPropertyRow";
 import { OwnerPropertyCard } from "../../components/dashboard/OwnerPropertyCard";
 import { AddPropertyModal } from "../../components/AddPropertyModal";
 import { EditPropertyModal } from "../../components/EditPropertyModal";
-// import { PropertyNotesSection } from "../../components/owner/PropertyNotesSection";
 import { BookingCard } from "../../components/owner/BookingCard";
 import { BookingConfirmModal } from "../../components/owner/BookingConfirmModal";
 import { ResubmitReviewWarningModal } from "../../components/ResubmitReviewWarningModal";
@@ -46,7 +39,7 @@ import { showToast } from "../../store/slices/ui.slice";
 import { updateUser, getCurrentUser } from "../../store/slices/auth.slice";
 import { Room, Booking } from "../../types/api.types";
 import FullscreenLoader from "../../components/ui/Loader"; // adjust path
-import { NotificationBadgeEnhanced } from "../../components/NotificationBadgeEnhanced";
+
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -379,11 +372,11 @@ export function OwnerDashboard() {
                 <MessageSquare className="modal-icon-orange w-5 h-5" />
               </div>
               <div className="modal-title-section">
-                <div className="modal-title">Admin Feedback sdf</div>
+                <div className="modal-title">Admin Feedback</div>
                 <div className="modal-subtitle">{viewingFeedback.title}</div>
               </div>
-              <button 
-                className="modal-close-btn" 
+              <button
+                className="modal-close-btn"
                 onClick={() => setViewingFeedback(null)}
                 title="Close modal"
               >
@@ -423,15 +416,19 @@ export function OwnerDashboard() {
               {/* ✅ STEP 2: Next steps - Clear action items */}
               <div className="next-steps-card">
                 <div className="next-steps-label">Next Steps</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-                  {["Review the feedback carefully", "Edit your property to fix the issues", "Resubmit for review when ready"].map(
-                    (step, i) => (
-                      <div key={i} className="next-steps-item">
-                        <CheckCircle2 className="next-steps-item-icon" />
-                        <span>{step}</span>
-                      </div>
-                    ),
-                  )}
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: "0" }}
+                >
+                  {[
+                    "Review the feedback carefully",
+                    "Edit your property to fix the issues",
+                    "Resubmit for review when ready",
+                  ].map((step, i) => (
+                    <div key={i} className="next-steps-item">
+                      <CheckCircle2 className="next-steps-item-icon" />
+                      <span>{step}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -439,7 +436,9 @@ export function OwnerDashboard() {
               <div className="metadata-row">
                 <span className="metadata-item">
                   <Clock className="w-3 h-3" />
-                  {new Date(viewingFeedback.adminFeedback.createdAt).toLocaleString()}
+                  {new Date(
+                    viewingFeedback.adminFeedback.createdAt,
+                  ).toLocaleString()}
                 </span>
                 {viewingFeedback.adminFeedback.adminName && (
                   <span style={{ fontSize: "12px" }}>
@@ -473,15 +472,15 @@ export function OwnerDashboard() {
 
       <DashboardShell
         title={`${getGreeting()}, ${user.name.split(" ")[0]}`}
-        subtitle="Manage your properties, Visits and performance"
+        subtitle="Manage your rental properties, Visits and performance"
         action={
-          <div className="flex items-center gap-3 justify-end">
+          <div className="flex items-center gap-3 justify-end w-full">
             {/* ✅ Add New Property Button */}
             <button onClick={openAddPropertyFlow} className="btn-add-property">
               <Plus style={{ width: 17, height: 17 }} /> Add New Property
             </button>
             {/* ✅ Notification Icon - Aligned Right with Add Property */}
-            <NotificationBadgeEnhanced />
+            {/* <NotificationBadgeEnhanced /> */}
           </div>
         }
       >
@@ -503,47 +502,6 @@ export function OwnerDashboard() {
             </div>
           </div>
         )}
-
-        {/* Stats - Grouped Summary Block */}
-        <div className="stats-row">
-          <div className="stat-wrapper">
-            <StatCard
-              icon={<BarChart3 style={{ width: 18, height: 18 }} />}
-              label="Total Properties"
-              value={summary?.totalRooms || 0}
-              onClick={() => setActiveTab("properties")}
-            />
-          </div>
-          <div className="stat-wrapper">
-            <StatCard
-              icon={<Users style={{ width: 18, height: 18 }} />}
-              label="Total Leads"
-              value={summary?.totalLeads || 0}
-              onClick={() => setActiveTab("bookings")}
-              badge={
-                pendingBookings > 0 ? (
-                  <span className="inline-flex items-center px-2 py-1.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 border border-amber-500/25 whitespace-nowrap">
-                    {pendingBookings} new
-                  </span>
-                ) : null
-              }
-            />
-          </div>
-          {/* <div className="stat-wrapper-large">
-            <StatCard
-              icon={<IndianRupee style={{ width: 18, height: 18 }} />}
-              label="Total Earnings"
-              value={`₹${(summary?.totalEarnings || 0).toLocaleString()}`}
-              badge={
-                <TrendingUp
-                  style={{ width: 15, height: 15, color: "#10b981" }}
-                />
-              }
-            />
-          </div> */}
-        </div>
-
-        <RecentActivity activity={activity} loading={activityLoading} />
 
         {/* Main Section */}
         <SectionCard>
@@ -584,7 +542,7 @@ export function OwnerDashboard() {
                     color: "var(--text-secondary)",
                   }}
                 >
-                  Manage listings, review corrections, and track booking
+                  Manage listings, review corrections, and track Visits
                   activity in one place.
                 </p>
               </div>
@@ -794,6 +752,8 @@ export function OwnerDashboard() {
             />
           )}
         </SectionCard>
+
+        <RecentActivity activity={activity} loading={activityLoading} />
       </DashboardShell>
     </>
   );

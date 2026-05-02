@@ -33,9 +33,13 @@ export class RoomService {
     // OWNER / ADMIN / AGENT → no forced reviewStatus filter (they use their own
     // dedicated endpoints, but if they ever hit this route they see everything).
     const isTenantOrPublic = !requesterRole || requesterRole === 'TENANT' || requesterRole === 'tenant';
+    
+    // ✅ FIX: Pass roomTypes to repository if available
     const result = await this.roomRepository.findAll({
       city: filters.city,
       roomType: filters.roomType,
+      // ✅ NEW: Pass roomTypes (multiple) to repository
+      ...(filters.roomTypes ? { roomTypes: filters.roomTypes } : {}),
       minPrice: filters.minPrice,
       maxPrice: filters.maxPrice,
       onlyActive: true,

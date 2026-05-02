@@ -264,19 +264,35 @@ export class PrismaRoomRepository implements IRoomRepository {
     nextCursor?: string;
   }> {
     try {
-      // ✅ CURSOR PAGINATION: Use cursor instead of page/skip
-      const cursor = filters?.cursor ? String(filters.cursor).trim() : undefined;
+      // ✅ DEBUG: Log all incoming filters
+      logger.info('🔍 REPOSITORY: findAll() called with filters', {
+        filters: {
+          city: filters?.city,
+          roomType: filters?.roomType,
+          roomTypes: filters?.roomTypes,
+          minPrice: filters?.minPrice,
+          maxPrice: filters?.maxPrice,
+          sort: filters?.sort,
+          page: filters?.page,
+          limit: filters?.limit,
+          cursor: filters?.cursor,
+          genderPreference: filters?.genderPreference,
+          idealFor: filters?.idealFor,
+          reviewStatus: filters?.reviewStatus,
+          onlyActive: filters?.onlyActive
+        }
+      });
+
+      // ✅ PAGE-BASED PAGINATION: Use skip and take
+      const page = Math.max(parseInt(String(filters?.page)) || 1, 1);
       const limit = Math.min(
         Math.max(parseInt(String(filters?.limit)) || 20, 1),
-        100,
+        100
       );
+      const skip = (page - 1) * limit;
       
-      // For compatibility, still accept page parameter but convert to cursor
-      // This maintains backward compatibility during migration
-      let paginationCursor: any = undefined;
-      if (cursor) {
-        paginationCursor = { id: cursor };
-      }
+      // ✅ DEBUG LOGS
+      console.log("PAGE:", page, "SKIP:", skip);
       
       const where: Prisma.RoomWhereInput = {};
 
@@ -312,6 +328,12 @@ export class PrismaRoomRepository implements IRoomRepository {
           where.roomType = {
             in: roomTypeArray,
           };
+          // ✅ DEBUG: Log roomTypes filter applied
+          logger.info('🔍 REPOSITORY: roomTypes filter APPLIED', {
+            received: filters.roomTypes,
+            normalized: roomTypeArray,
+            dbCondition: `WHERE roomType IN (${roomTypeArray.map(t => `'${t}'`).join(',')})`
+          });
         }
       } else if (
         filters?.roomType &&
@@ -320,6 +342,11 @@ export class PrismaRoomRepository implements IRoomRepository {
       ) {
         // Fallback to single roomType (backward compatibility)
         where.roomType = filters.roomType.trim() as any;
+        // ✅ DEBUG: Log single roomType filter
+        logger.info('🔍 REPOSITORY: roomType filter APPLIED (LEGACY)', {
+          value: filters.roomType,
+          dbCondition: `WHERE roomType = '${filters.roomType}'`
+        });
       }
 
       // ✅ NEW: Gender preference filtering
@@ -454,6 +481,14 @@ export class PrismaRoomRepository implements IRoomRepository {
       const total = await this.prisma.room.count({
         where,
       });
+      
+      // ✅ DEBUG: Log complete WHERE clause and query count
+      logger.info('🔍 REPOSITORY: DB Query executed', {
+        whereClause: JSON.stringify(where, null, 2),
+        totalMatchingRecords: total,
+        limit,
+        
+      });
 
       // ✅ CURSOR PAGINATION FOR MOST_VIEWED/MOST_CONTACTED
       if (sortNorm === "most_viewed" || sortNorm === "most_contacted") {
@@ -484,20 +519,9 @@ export class PrismaRoomRepository implements IRoomRepository {
           const sortedByDemand = eventAggregation
             .sort((a, b) => b._count._all - a._count._all);
 
-          // STEP 3: Apply cursor-based pagination to ranked IDs
-          let startIndex = 0;
-          if (cursor) {
-            // Find the cursor position in sorted demand list
-            startIndex = sortedByDemand.findIndex(agg => agg.propertyId === cursor);
-            if (startIndex !== -1) {
-              startIndex += 1; // Start after the cursor
-            } else {
-              startIndex = 0; // Cursor not found, start from beginning
-            }
-          }
-
+          // STEP 3: Apply skip/take pagination to ranked IDs
           const rankedRoomIds = sortedByDemand
-            .slice(startIndex, startIndex + limit + 1) // Get limit + 1 to detect next page
+            .slice(skip, skip + limit + 1) // Get limit + 1 to detect next page
             .map(agg => agg.propertyId)
             .filter(Boolean) as string[];
 
@@ -508,7 +532,6 @@ export class PrismaRoomRepository implements IRoomRepository {
           // STEP 4: Detect if there's a next page
           const hasNextPage = rankedRoomIds.length > limit;
           const pageRoomIds = hasNextPage ? rankedRoomIds.slice(0, limit) : rankedRoomIds;
-          const nextCursor = hasNextPage ? pageRoomIds[pageRoomIds.length - 1] : undefined;
 
           // STEP 5: Fetch full room data for ranked IDs only
           const raw = await this.prisma.room.findMany({
@@ -525,7 +548,7 @@ export class PrismaRoomRepository implements IRoomRepository {
             orderedRows.map(r => this.toDomain(r))
           );
 
-          return { rooms, total, hasNextPage, nextCursor };
+          return { rooms, total, hasNextPage };
         } catch (error) {
           logger.warn('Most viewed/contacted sorting failed, falling back to standard sorting', {
             error: error instanceof Error ? error.message : String(error),
@@ -533,40 +556,36 @@ export class PrismaRoomRepository implements IRoomRepository {
             sortNorm,
           });
 
-          // Safe fallback: Use standard cursor-based pagination
-          const rawCursor = await this.prisma.room.findMany({
+          // Safe fallback: Use standard skip/take pagination
+          const rawFallback = await this.prisma.room.findMany({
             where,
-            cursor: paginationCursor,
-            skip: paginationCursor ? 1 : 0, // Skip the cursor item itself on subsequent pages
+            skip,
             take: limit + 1, // Get limit + 1 to detect next page
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
             include,
           });
-          const hasNextPage = rawCursor.length > limit;
-          const pageRows = hasNextPage ? rawCursor.slice(0, limit) : rawCursor;
-          const nextCursorVal = hasNextPage ? pageRows[pageRows.length - 1]?.id : undefined;
+          const hasNextPage = rawFallback.length > limit;
+          const pageRows = hasNextPage ? rawFallback.slice(0, limit) : rawFallback;
           const rooms = await this.attachDemand(
             pageRows.map(r => this.toDomain(r))
           );
 
-          return { rooms, total, hasNextPage, nextCursor: nextCursorVal };
+          return { rooms, total, hasNextPage };
         }
       }
 
-      // ✅ CURSOR-BASED PAGINATION: Main query
-      const rawCursor = await this.prisma.room.findMany({
+      // ✅ SKIP/TAKE PAGINATION: Main query with stable ordering
+      const rawResults = await this.prisma.room.findMany({
         where,
-        cursor: paginationCursor,
-        skip: paginationCursor ? 1 : 0, // Skip the cursor item itself
+        skip,
         take: limit + 1, // Get limit + 1 to detect if there's a next page
         orderBy,
         include,
       });
 
       // ✅ Check if there are more pages
-      const hasNextPage = rawCursor.length > limit;
-      const pageRows = hasNextPage ? rawCursor.slice(0, limit) : rawCursor;
-      const nextCursorVal = hasNextPage ? pageRows[pageRows.length - 1]?.id : undefined;
+      const hasNextPage = rawResults.length > limit;
+      const pageRows = hasNextPage ? rawResults.slice(0, limit) : rawResults;
 
       const rooms = await this.attachDemand(pageRows.map((r) => this.toDomain(r)));
 
@@ -574,7 +593,6 @@ export class PrismaRoomRepository implements IRoomRepository {
         rooms,
         total,
         hasNextPage,
-        nextCursor: nextCursorVal,
       };
     } catch (error: any) {
       logger.error("Error finding all rooms", {

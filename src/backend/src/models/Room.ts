@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidAmenityId } from '../config/amenities.config';
 export const RoomType = z.enum(["Single", "Shared", "PG", "1RK", "2RK", "1BHK", "2BHK", "3BHK", "4BHK", "Independent House"]);
 export const IdealFor = z.enum(["Students", "Working Professionals", "Family"]);
 // ✅ NEW: Gender preference for property restrictions
@@ -75,7 +76,19 @@ export const CreateRoomSchema = z.object({
   pricePerMonth: z.number().positive("Price must be positive"),
   roomType: RoomType,
   idealFor: z.array(IdealFor).min(1, "Please select at least one tenant type"),
-  amenities: z.array(z.string()).default([]),
+  // ✅ REFACTORED: Amenities validation against allowed list
+  amenities: z
+    .array(z.string())
+    .default([])
+    .refine(
+      (ids) => ids.every((id) => isValidAmenityId(id)),
+      (ids) => {
+        const invalidIds = ids.filter((id) => !isValidAmenityId(id));
+        return {
+          message: `Invalid amenities: ${invalidIds.join(', ')}. Only allowed amenity IDs are accepted.`,
+        };
+      }
+    ),
   images: z.array(z.string()).min(1, "At least one image is required"),
   // ✅ NEW: Gender preference validation
   genderPreference: GenderPreference.default("ANY"),

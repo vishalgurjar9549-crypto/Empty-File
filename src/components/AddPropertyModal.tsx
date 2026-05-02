@@ -1,12 +1,30 @@
-import React, { useEffect, useMemo, useRef, useState, useId, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId,
+  useCallback,
+} from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronDown, Check, MapPin, Home, IndianRupee, Sparkles, Users } from "lucide-react";
+import {
+  X,
+  ChevronDown,
+  Check,
+  MapPin,
+  Home,
+  IndianRupee,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { createRoom } from "../store/slices/rooms.slice";
 import { getCurrentUser } from "../store/slices/auth.slice";
+import { fetchOwnerRooms } from "../store/slices/owner.slice";
 import { loadAllCities } from "../store/slices/metadata.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
+import AmenitiesForm from "./AmenitiesForm";
 import FullscreenLoader from "./ui/Loader";
 import { FormGrid } from "./ui/FormGrid";
 import { RoomType, IdealFor, GenderPreference } from "../types/api.types";
@@ -67,9 +85,18 @@ function SectionCard({
   );
 }
 
-function ErrorText({ id, children }: { id: string; children: React.ReactNode }) {
+function ErrorText({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
   return (
-    <p id={id} className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+    <p
+      id={id}
+      className="mt-2 text-xs font-medium text-red-600 dark:text-red-400"
+    >
       {children}
     </p>
   );
@@ -88,7 +115,6 @@ export function AddPropertyModal({
   const modalDescriptionId = useId();
 
   const modalRef = useRef<HTMLDivElement | null>(null);
-  const firstFocusableRef = useRef<HTMLInputElement | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
   const cityWrapperRef = useRef<HTMLDivElement | null>(null);
   // ✅ NEW: Separate ref for the city input element (used to measure position for portal)
@@ -113,8 +139,8 @@ export function AddPropertyModal({
     latitude: null as number | null,
     longitude: null as number | null,
     pricePerMonth: "",
-    roomType: "Single" as RoomType,
-    idealFor: ["Students"] as IdealFor[],
+    roomType: "" as RoomType | "",
+    idealFor: [] as IdealFor[],
     description: "",
     amenities: [] as string[],
     images: [] as string[],
@@ -133,13 +159,8 @@ export function AddPropertyModal({
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    const timeout = setTimeout(() => {
-      firstFocusableRef.current?.focus();
-    }, 50);
-
     return () => {
       document.body.style.overflow = originalOverflow || "auto";
-      clearTimeout(timeout);
     };
   }, [isOpen]);
 
@@ -185,9 +206,13 @@ export function AddPropertyModal({
       if (e.key !== "Tab" || !modalRef.current) return;
 
       const focusableElements = modalRef.current.querySelectorAll<
-        HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLAnchorElement
+        | HTMLButtonElement
+        | HTMLInputElement
+        | HTMLSelectElement
+        | HTMLTextAreaElement
+        | HTMLAnchorElement
       >(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
 
       if (!focusableElements.length) return;
@@ -217,7 +242,7 @@ export function AddPropertyModal({
     if (!cityInputRef.current) return;
     const rect = cityInputRef.current.getBoundingClientRect();
     setDropdownPos({
-      top: rect.bottom + 8,    // 8px gap below input
+      top: rect.bottom + 8, // 8px gap below input
       left: rect.left,
       width: rect.width,
     });
@@ -247,7 +272,7 @@ export function AddPropertyModal({
 
   const filteredCities = useMemo(() => {
     return allCities.filter((c) =>
-      c.name.toLowerCase().includes(search.toLowerCase())
+      c.name.toLowerCase().includes(search.toLowerCase()),
     );
   }, [allCities, search]);
 
@@ -271,8 +296,8 @@ export function AddPropertyModal({
       latitude: null,
       longitude: null,
       pricePerMonth: "",
-      roomType: "Single",
-      idealFor: ["Students"],
+      roomType: "" as RoomType | "",
+      idealFor: [],
       description: "",
       amenities: [],
       images: [],
@@ -323,6 +348,10 @@ export function AddPropertyModal({
       } required.`;
     }
 
+    if (!formData.roomType) {
+      newErrors.roomType = "Please select a room type.";
+    }
+
     if (formData.idealFor.length === 0) {
       newErrors.idealFor = "Select at least one tenant type.";
     }
@@ -366,6 +395,7 @@ export function AddPropertyModal({
 
     if (createRoom.fulfilled.match(action)) {
       dispatch(getCurrentUser());
+      await dispatch(fetchOwnerRooms());
       resetForm();
       onClose();
       return;
@@ -426,14 +456,14 @@ export function AddPropertyModal({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveCityIndex((prev) =>
-        prev < filteredCities.length - 1 ? prev + 1 : 0
+        prev < filteredCities.length - 1 ? prev + 1 : 0,
       );
     }
 
     if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveCityIndex((prev) =>
-        prev > 0 ? prev - 1 : filteredCities.length - 1
+        prev > 0 ? prev - 1 : filteredCities.length - 1,
       );
     }
 
@@ -515,7 +545,7 @@ export function AddPropertyModal({
               </div>
             )}
           </div>,
-          document.body
+          document.body,
         )
       : null;
 
@@ -644,7 +674,6 @@ export function AddPropertyModal({
                       <input
                         ref={(el) => {
                           fieldRefs.current.title = el;
-                          firstFocusableRef.current = el;
                         }}
                         id="title"
                         value={formData.title}
@@ -655,8 +684,14 @@ export function AddPropertyModal({
                           if (value.trim().length >= 5) clearError("title");
                         }}
                         aria-invalid={!!errors.title}
-                        aria-describedby={errors.title ? "title-error" : undefined}
-                        className={`${inputClass} ${errors.title ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20" : ""}`}
+                        aria-describedby={
+                          errors.title ? "title-error" : undefined
+                        }
+                        className={`${inputClass} ${
+                          errors.title
+                            ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                            : ""
+                        }`}
                         placeholder="e.g. Fully Furnished PG near College"
                       />
                       {errors.title && (
@@ -701,8 +736,14 @@ export function AddPropertyModal({
                           }}
                           onKeyDown={handleCityKeyDown}
                           aria-invalid={!!errors.city}
-                          aria-describedby={errors.city ? "city-error" : undefined}
-                          className={`${inputClass} pr-11 ${errors.city ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20" : ""}`}
+                          aria-describedby={
+                            errors.city ? "city-error" : undefined
+                          }
+                          className={`${inputClass} pr-11 ${
+                            errors.city
+                              ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                              : ""
+                          }`}
                         />
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                       </div>
@@ -729,11 +770,17 @@ export function AddPropertyModal({
                         aria-describedby={
                           errors.location ? "location-error" : undefined
                         }
-                        className={`${inputClass} ${errors.location ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20" : ""}`}
+                        className={`${inputClass} ${
+                          errors.location
+                            ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                            : ""
+                        }`}
                         placeholder="e.g. Talwandi, Kota"
                       />
                       {errors.location && (
-                        <ErrorText id="location-error">{errors.location}</ErrorText>
+                        <ErrorText id="location-error">
+                          {errors.location}
+                        </ErrorText>
                       )}
                     </div>
 
@@ -827,7 +874,11 @@ export function AddPropertyModal({
                         aria-describedby={
                           errors.pricePerMonth ? "price-error" : undefined
                         }
-                        className={`${inputClass} ${errors.pricePerMonth ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20" : ""}`}
+                        className={`${inputClass} ${
+                          errors.pricePerMonth
+                            ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                            : ""
+                        }`}
                         placeholder="e.g. 8500"
                       />
                       {errors.pricePerMonth && (
@@ -839,27 +890,93 @@ export function AddPropertyModal({
 
                     <div>
                       <label htmlFor="roomType" className={labelClass}>
-                        Room Type
+                        Room Type *
                       </label>
                       <select
+                        ref={(el) => (fieldRefs.current.roomType = el)}
                         id="roomType"
                         value={formData.roomType}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = e.target.value;
                           setFormData((prev) => ({
                             ...prev,
-                            roomType: e.target.value as RoomType,
-                          }))
+                            roomType: value as RoomType | "",
+                          }));
+                          if (value) clearError("roomType");
+                        }}
+                        aria-invalid={!!errors.roomType}
+                        aria-describedby={
+                          errors.roomType ? "roomType-error" : undefined
                         }
-                        className={inputClass}
+                        className={`${inputClass} ${
+                          errors.roomType
+                            ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                            : ""
+                        }`}
                       >
+                        <option value="">Select Room Type</option>
                         {ROOM_TYPES.map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>
                         ))}
                       </select>
+                      {errors.roomType && (
+                        <ErrorText id="roomType-error">
+                          {errors.roomType}
+                        </ErrorText>
+                      )}
                     </div>
                   </FormGrid>
+                </SectionCard>
+
+  <SectionCard
+                  title="Ideal For"
+                  subtitle="Help renters understand who this property suits best."
+                  icon={<Home className="h-5 w-5" />}
+                >
+                  <fieldset
+                    ref={(el) => (fieldRefs.current.idealFor = el)}
+                    aria-invalid={!!errors.idealFor}
+                    aria-describedby={
+                      errors.idealFor ? "idealFor-error" : undefined
+                    }
+                  >
+                    <legend className="sr-only">Ideal For</legend>
+
+                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
+                      {IDEAL_FOR.map((option) => {
+                        const selected = formData.idealFor.includes(option);
+
+                        return (
+                          <label
+                            key={option}
+                            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
+                              selected
+                                ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-500 dark:bg-amber-500/10 dark:ring-amber-500/20"
+                                : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/60"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleIdealFor(option)}
+                              className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {option}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </FormGrid>
+
+                    {errors.idealFor && (
+                      <ErrorText id="idealFor-error">
+                        {errors.idealFor}
+                      </ErrorText>
+                    )}
+                  </fieldset>
                 </SectionCard>
 
                 <SectionCard
@@ -904,53 +1021,6 @@ export function AddPropertyModal({
                 </SectionCard>
 
                 <SectionCard
-                  title="Ideal For"
-                  subtitle="Help renters understand who this property suits best."
-                  icon={<Home className="h-5 w-5" />}
-                >
-                  <fieldset
-                    ref={(el) => (fieldRefs.current.idealFor = el)}
-                    aria-invalid={!!errors.idealFor}
-                    aria-describedby={errors.idealFor ? "idealFor-error" : undefined}
-                  >
-                    <legend className="sr-only">Ideal For</legend>
-
-                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
-                      {IDEAL_FOR.map((option) => {
-                        const selected = formData.idealFor.includes(option);
-
-                        return (
-                          <label
-                            key={option}
-                            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
-                              selected
-                                ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-500 dark:bg-amber-500/10 dark:ring-amber-500/20"
-                                : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/60"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleIdealFor(option)}
-                              className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {option}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </FormGrid>
-
-                    {errors.idealFor && (
-                      <ErrorText id="idealFor-error">
-                        {errors.idealFor}
-                      </ErrorText>
-                    )}
-                  </fieldset>
-                </SectionCard>
-
-                <SectionCard
                   title="Description"
                   subtitle="Write a short but useful summary of the room and nearby highlights."
                   icon={<Sparkles className="h-5 w-5" />}
@@ -971,7 +1041,8 @@ export function AddPropertyModal({
                           ...prev,
                           description: value,
                         }));
-                        if (value.trim().length >= 20) clearError("description");
+                        if (value.trim().length >= 20)
+                          clearError("description");
                       }}
                       aria-invalid={!!errors.description}
                       aria-describedby={
@@ -979,7 +1050,11 @@ export function AddPropertyModal({
                           ? "description-error"
                           : "description-help"
                       }
-                      className={`${textareaClass} ${errors.description ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20" : ""}`}
+                      className={`${textareaClass} ${
+                        errors.description
+                          ? "border-red-400 focus:ring-red-200 dark:border-red-700 dark:focus:ring-red-500/20"
+                          : ""
+                      }`}
                       placeholder="Describe furnishing, ventilation, nearby colleges/offices, food options, transport, and any house rules..."
                     />
 
@@ -1009,45 +1084,18 @@ export function AddPropertyModal({
                   subtitle="Optional, but useful for improving listing quality."
                   icon={<Check className="h-5 w-5" />}
                 >
-                  <fieldset
-                    ref={(el) => (fieldRefs.current.amenities = el)}
-                    aria-describedby={errors.amenities ? "amenities-error" : undefined}
-                  >
-                    <legend className="sr-only">Amenities</legend>
-
-                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
-                      {amenities.map((amenity) => {
-                        const selected = formData.amenities.includes(amenity);
-
-                        return (
-                          <label
-                            key={amenity}
-                            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
-                              selected
-                                ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-500 dark:bg-amber-500/10 dark:ring-amber-500/20"
-                                : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/60"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleAmenity(amenity)}
-                              className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {amenity}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </FormGrid>
-
-                    {errors.amenities && (
-                      <ErrorText id="amenities-error">
-                        {errors.amenities}
-                      </ErrorText>
-                    )}
-                  </fieldset>
+                  <AmenitiesForm
+                    selectedAmenities={formData.amenities}
+                    onAmenitiesChange={(amenityIds) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        amenities: amenityIds,
+                      }));
+                      clearError('amenities');
+                    }}
+                    error={errors.amenities}
+                    ariaDescribedBy={errors.amenities ? 'amenities-error' : undefined}
+                  />
                 </SectionCard>
               </div>
 
@@ -1075,7 +1123,7 @@ export function AddPropertyModal({
                         Adding Property...
                       </>
                     ) : (
-                      "Publish Property"
+                      "Add Property"
                     )}
                   </button>
                 </div>

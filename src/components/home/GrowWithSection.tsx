@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { PhoneModal } from "../PhoneModal";
 import { useListPropertyAction } from "../../hooks/useListPropertyAction";
+import { useBecomeAgentAction } from "../../hooks/useBecomeAgentAction";
 
 type PartnerCard = {
   title: string;
@@ -16,7 +17,7 @@ type PartnerCard = {
   cta: string;
   to?: string;
   badge?: string;
-  action?: "list-property";
+  action?: "list-property" | "become-agent";
 };
 
 const partnerCards: PartnerCard[] = [
@@ -29,23 +30,23 @@ const partnerCards: PartnerCard[] = [
     badge: "For Owners",
     action: "list-property",
   },
-  {
-    title: "Affiliate Partner",
-    description:
-      "Earn by referring users, properties, or bookings through your network, audience, or community.",
-    icon: BadgePercent,
-    cta: "Join Affiliate",
-    to: "/partner/affiliate",
-    badge: "Earn With Us",
-  },
+  // {
+  //   title: "Affiliate Partner",
+  //   description:
+  //     "Earn by referring users, properties, or bookings through your network, audience, or community.",
+  //   icon: BadgePercent,
+  //   cta: "Join Affiliate",
+  //   to: "/partner/affiliate",
+  //   badge: "Earn With Us",
+  // },
   {
     title: "Become an Agent",
     description:
       "Work with us as a trusted field or booking partner and help property owners grow occupancy.",
     icon: Users,
     cta: "Apply as Agent",
-    to: "/partner/agent",
     badge: "Growth Partner",
+    action: "become-agent",
   },
 ];
 
@@ -55,6 +56,8 @@ export default function GrowWithSection() {
   const { handleListPropertyClick } = useListPropertyAction({
     onRequirePhone: () => setShowPhoneModal(true),
   });
+
+  const { handleBecomeAgentClick } = useBecomeAgentAction();
 
   return (
     <>
@@ -134,6 +137,18 @@ export default function GrowWithSection() {
                   <button
                     key={index}
                     onClick={handleListPropertyClick}
+                    className="group relative flex w-full flex-col sm:min-h-[220px] lg:min-h-[240px] overflow-hidden rounded-3xl border border-border/60 bg-card/70 p-4 sm:p-5 text-left shadow-sm backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/40 hover:shadow-xl hover:shadow-amber-500/10 dark:bg-white/[0.03]"
+                  >
+                    {cardContent}
+                  </button>
+                );
+              }
+
+              if (item.action === "become-agent") {
+                return (
+                  <button
+                    key={index}
+                    onClick={handleBecomeAgentClick}
                     className="group relative flex w-full flex-col sm:min-h-[220px] lg:min-h-[240px] overflow-hidden rounded-3xl border border-border/60 bg-card/70 p-4 sm:p-5 text-left shadow-sm backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/40 hover:shadow-xl hover:shadow-amber-500/10 dark:bg-white/[0.03]"
                   >
                     {cardContent}

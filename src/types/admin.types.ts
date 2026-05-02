@@ -90,6 +90,9 @@ export interface AdminState {
   tenantAssignments: TenantAssignment[];
   assignmentsLoading: boolean;
   assignmentsError: string | null;
+  // ✅ All agents (for agent assignments visibility)
+  allAgents: User[];
+  agentsLoading: boolean;
   loading: boolean;
   error: string | null;
   usersRequestId: string | null;

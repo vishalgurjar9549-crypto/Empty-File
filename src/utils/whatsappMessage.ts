@@ -1,10 +1,11 @@
 /**
  * Builds a WhatsApp message for property inquiries
  * Single source of truth for all property WhatsApp communications
+ * Uses Unicode escape sequences to ensure emojis are UTF-8 safe
  * @param name - Owner name
  * @param title - Property title
  * @param propertyId - Property ID
- * @returns Formatted WhatsApp message string
+ * @returns Formatted WhatsApp message string with proper Unicode encoding
  */
 export function buildPropertyWhatsappMessage({
   name,
@@ -15,27 +16,29 @@ export function buildPropertyWhatsappMessage({
   title: string;
   propertyId: string;
 }): string {
-  const url = `${import.meta.env.VITE_API_URL}/rooms/${propertyId}`;
+  const frontendUrl = import.meta.env.VITE_FRONTEND_URL || window.location.origin;
+  const VITE_FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || window.location.origin;
+  const url = `${frontendUrl.replace(/\/$/, "")}/review/${propertyId}`;
 
-  return `🏠 *Homilivo — Property Platform*
+  return `🏠 *Homilivo* - Property Rental Platform
 
 Hi ${name},
 
-🎉 Great news! Your property *"${title}"* is now live on Homilivo.
+We found your property *"${title}"* and created a *FREE listing* on Homilivo to help you get tenant inquiries faster.
 
-🚀 Start receiving tenant inquiries faster and increase your chances of renting quickly.
+⚠️ Some details are auto-added and may need correction.
 
-✨ *What you get:*
-• 100% FREE listing
-• Verified tenant leads
-• Easy property management
-
-━━━━━━━━━━━━━━━
-👉 *VIEW YOUR PROPERTY*
+👉 Please review and update your property:
 ${url}
-━━━━━━━━━━━━━━━
 
-Need help? Just reply here — we're happy to assist 🙂`;
+🔥 Verified listings get more visibility and faster responses.
+
+⏱ It only takes 1–2 minutes.
+
+If this isn’t your property, you can ignore this message.
+visit ${VITE_FRONTEND_URL} for more info.
+
+Need help? Just reply here 🙂`;
 }
 
 /**
@@ -50,10 +53,11 @@ export function generateWhatsAppUrl(
 ): string {
   const clean = phoneNumber.replace(/\D/g, "");
 
-  const finalPhone =
-    clean.length === 10 ? `91${clean}` : clean;
-
-  return `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`;
+  const finalPhone = clean.length === 10 ? `91${clean}` : clean;
+  const encodedMessage = encodeURIComponent(message);
+  console.log(message);
+  console.log(encodedMessage);
+  return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodedMessage}`;
 }
 
 /**

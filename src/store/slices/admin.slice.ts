@@ -18,6 +18,9 @@ const initialState: AdminState = {
   tenantAssignments: [],
   assignmentsLoading: false,
   assignmentsError: null,
+  // ✅ All agents (for agent assignments visibility)
+  allAgents: [],
+  agentsLoading: false,
   usersRequestId: null,
   propertiesRequestId: null
 };
@@ -242,6 +245,21 @@ export const fetchTenantAssignments = createAsyncThunk('admin/fetchTenantAssignm
     return assignments;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch tenant assignments';
+    return rejectWithValue(message);
+  }
+});
+
+// ✅ NEW: Fetch all agents (for displaying agents with zero assignments)
+export const fetchAllAgents = createAsyncThunk('admin/fetchAllAgents', async (_, {
+  dispatch,
+  rejectWithValue
+}) => {
+  try {
+    const response = await adminApi.getAllUsers({ role: 'AGENT', limit: 1000 });
+    return response.users;
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to fetch agents';
+    // Don't toast on initial load errors
     return rejectWithValue(message);
   }
 });
@@ -482,7 +500,11 @@ const adminSlice = createSlice({
     });
 
     // Request Correction — action.payload IS the updated Room object
-    builder.addCase(requestPropertyCorrection.fulfilled, (state, action) => {
+    builder.addCase(requestPropertyCorrection.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    }).addCase(requestPropertyCorrection.fulfilled, (state, action) => {
+      state.loading = false;
       const updated = action.payload;
       const index = state.properties.findIndex((p) => p.id === updated.id);
       if (index !== -1) {
@@ -497,6 +519,9 @@ const adminSlice = createSlice({
           type: 'warning'
         });
       }
+    }).addCase(requestPropertyCorrection.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
     });
 
     // Recent Activity
@@ -526,6 +551,59 @@ const adminSlice = createSlice({
     }).addCase(fetchTenantAssignments.rejected, (state, action) => {
       state.assignmentsLoading = false;
       state.assignmentsError = action.payload as string;
+    });
+
+    // ✅ All Agents (for agent assignments visibility)
+    builder.addCase(fetchAllAgents.pending, (state) => {
+      state.agentsLoading = true;
+    }).addCase(fetchAllAgents.fulfilled, (state, action) => {
+      state.agentsLoading = false;
+      state.allAgents = action.payload;
+    }).addCase(fetchAllAgents.rejected, (state) => {
+      state.agentsLoading = false;
+      state.allAgents = [];
+    });
+
+    // ✅ FIX: Add handlers for assignment mutations (MISSING BEFORE)
+    // These were calling dispatch(fetchPropertyAssignments()) but had no reducer handlers
+    builder.addCase(assignPropertyToAgent.pending, (state) => {
+      state.assignmentsLoading = true;
+      state.assignmentsError = null;
+    }).addCase(assignPropertyToAgent.fulfilled, (state) => {
+      state.assignmentsLoading = false;
+    }).addCase(assignPropertyToAgent.rejected, (state, action) => {
+      state.assignmentsError = action.payload as string;
+      state.assignmentsLoading = false;
+    });
+
+    builder.addCase(unassignPropertyFromAgent.pending, (state) => {
+      state.assignmentsLoading = true;
+      state.assignmentsError = null;
+    }).addCase(unassignPropertyFromAgent.fulfilled, (state) => {
+      state.assignmentsLoading = false;
+    }).addCase(unassignPropertyFromAgent.rejected, (state, action) => {
+      state.assignmentsError = action.payload as string;
+      state.assignmentsLoading = false;
+    });
+
+    builder.addCase(assignTenantToAgent.pending, (state) => {
+      state.assignmentsLoading = true;
+      state.assignmentsError = null;
+    }).addCase(assignTenantToAgent.fulfilled, (state) => {
+      state.assignmentsLoading = false;
+    }).addCase(assignTenantToAgent.rejected, (state, action) => {
+      state.assignmentsError = action.payload as string;
+      state.assignmentsLoading = false;
+    });
+
+    builder.addCase(unassignTenantFromAgent.pending, (state) => {
+      state.assignmentsLoading = true;
+      state.assignmentsError = null;
+    }).addCase(unassignTenantFromAgent.fulfilled, (state) => {
+      state.assignmentsLoading = false;
+    }).addCase(unassignTenantFromAgent.rejected, (state, action) => {
+      state.assignmentsError = action.payload as string;
+      state.assignmentsLoading = false;
     });
   }
 });

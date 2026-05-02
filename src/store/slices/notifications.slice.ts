@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { notificationsApi } from '../../api/notifications.api';
+import { notificationService } from '../../services';
 import { AppNotification } from '../../types/api.types';
 
 const UNREAD_COUNT_STALE_MS = 30 * 1000;
@@ -28,7 +28,7 @@ export const fetchUnreadCount = createAsyncThunk(
   'notifications/fetchUnreadCount',
   async (_, { rejectWithValue }) => {
     try {
-      const count = await notificationsApi.getUnreadCount();
+      const count = await notificationService.getUnreadCount();
       return count;
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to fetch unread count';
@@ -52,7 +52,7 @@ export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await notificationsApi.getMyNotifications();
+      const response = await notificationService.getMyNotifications();
       return response;
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to fetch notifications';
@@ -76,7 +76,7 @@ export const markNotificationAsRead = createAsyncThunk(
   'notifications/markAsRead',
   async (id: string, { rejectWithValue }) => {
     try {
-      const notification = await notificationsApi.markAsRead(id);
+      const notification = await notificationService.markAsRead(id);
       return notification;
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to mark as read';
@@ -136,7 +136,12 @@ const notificationsSlice = createSlice({
 
     // Mark as read
     builder
+      .addCase(markNotificationAsRead.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(markNotificationAsRead.fulfilled, (state, action) => {
+        state.loading = false;
         const index = state.notifications.findIndex((n) => n.id === action.payload.id);
         if (index !== -1) {
           state.notifications[index] = action.payload;
@@ -147,6 +152,7 @@ const notificationsSlice = createSlice({
         }
       })
       .addCase(markNotificationAsRead.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload as string;
       });
   },

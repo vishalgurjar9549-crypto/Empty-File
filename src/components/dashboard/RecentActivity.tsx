@@ -50,7 +50,7 @@ const formatActivityTime = (createdAt: string) => {
 export function RecentActivity({ activity, loading }: RecentActivityProps) {
   return (
     <section
-      className="section-card mb-3 md:mb-4"
+      className="section-card mt-4 md:mb-4"
       aria-label="Recent activity"
     >
       <div className="px-4 py-3 md:py-4 border-b border-[var(--color-gold-border)] flex items-center justify-between gap-3">

@@ -28,7 +28,7 @@ export function Contact() {
                       Email Us
                     </p>
                     <p className="font-medium text-navy dark:text-white">
-                      hello@kangaroorooms.com
+                      support@kangaroorooms.com
                     </p>
                   </div>
                 </div>
@@ -41,7 +41,7 @@ export function Contact() {
                       Call Us
                     </p>
                     <p className="font-medium text-navy dark:text-white">
-                      +91 80 1234 5678
+                      +91 82 09595 522
                     </p>
                   </div>
                 </div>
@@ -54,7 +54,7 @@ export function Contact() {
                       Visit Us
                     </p>
                     <p className="font-medium text-navy dark:text-white">
-                      123, 4th Block, Koramangala, Bangalore
+                      DoIT & C IT Building,Yojana Bhawan, Tilak Marg, C-Scheme Jaipur-302005 (Raj)
                     </p>
                   </div>
                 </div>

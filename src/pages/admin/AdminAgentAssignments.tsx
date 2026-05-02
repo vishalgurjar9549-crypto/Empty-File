@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Users, Home, UserCheck, ChevronDown, ChevronUp, Calendar, CheckCircle, XCircle, AlertCircle, RefreshCw, Search, Mail, Phone, Plus, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { fetchPropertyAssignments, fetchTenantAssignments, assignPropertyToAgent, unassignPropertyFromAgent, assignTenantToAgent, unassignTenantFromAgent } from '../../store/slices/admin.slice';
+import { fetchPropertyAssignments, fetchTenantAssignments, fetchAllAgents, assignPropertyToAgent, unassignPropertyFromAgent, assignTenantToAgent, unassignTenantFromAgent } from '../../store/slices/admin.slice';
 import { PropertyAssignment, TenantAssignment } from '../../types/admin.types';
 import { AssignPropertyModal } from '../../components/admin/AssignPropertyModal';
 import { AssignTenantModal } from '../../components/admin/AssignTenantModal';
@@ -20,7 +20,9 @@ export function AdminAgentAssignments() {
     propertyAssignments,
     tenantAssignments,
     assignmentsLoading,
-    assignmentsError
+    assignmentsError,
+    allAgents,
+    agentsLoading
   } = useAppSelector((state) => state.admin);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
@@ -41,11 +43,13 @@ export function AdminAgentAssignments() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Fetch data on mount
   useEffect(() => {
+    dispatch(fetchAllAgents());
     dispatch(fetchPropertyAssignments({}));
     dispatch(fetchTenantAssignments({}));
   }, [dispatch]);
   // Handle retry
   const handleRetry = () => {
+    dispatch(fetchAllAgents());
     dispatch(fetchPropertyAssignments({}));
     dispatch(fetchTenantAssignments({}));
   };
@@ -61,38 +65,39 @@ export function AdminAgentAssignments() {
   };
   // Process and group data
   const agentGroups = useMemo(() => {
+    // ✅ STEP 1: Initialize map with ALL agents first (ensures zero-assignment agents are visible)
     const groups: Record<string, AgentGroup> = {};
+    allAgents.forEach((agent) => {
+      groups[agent.id] = {
+        agentId: agent.id,
+        agentName: agent.name,
+        agentEmail: agent.email,
+        properties: [],
+        tenants: []
+      };
+    });
+
+    // ✅ STEP 2: Populate assignments into the map
     // Process properties
     propertyAssignments.forEach((assignment) => {
       if (showActiveOnly && !assignment.isActive) return;
-      if (!groups[assignment.agentId]) {
-        groups[assignment.agentId] = {
-          agentId: assignment.agentId,
-          agentName: assignment.agent.name,
-          agentEmail: assignment.agent.email,
-          properties: [],
-          tenants: []
-        };
+      // Only add if agent exists in map
+      if (groups[assignment.agentId]) {
+        groups[assignment.agentId].properties.push(assignment);
       }
-      groups[assignment.agentId].properties.push(assignment);
     });
     // Process tenants
     tenantAssignments.forEach((assignment) => {
       if (showActiveOnly && !assignment.isActive) return;
-      if (!groups[assignment.agentId]) {
-        groups[assignment.agentId] = {
-          agentId: assignment.agentId,
-          agentName: assignment.agent.name,
-          agentEmail: assignment.agent.email,
-          properties: [],
-          tenants: []
-        };
+      // Only add if agent exists in map
+      if (groups[assignment.agentId]) {
+        groups[assignment.agentId].tenants.push(assignment);
       }
-      groups[assignment.agentId].tenants.push(assignment);
     });
-    // Convert to array and filter by search
+
+    // ✅ STEP 3: Convert to array and filter by search
     return Object.values(groups).filter((group) => group.agentName.toLowerCase().includes(searchTerm.toLowerCase()) || group.agentEmail.toLowerCase().includes(searchTerm.toLowerCase())).sort((a, b) => a.agentName.localeCompare(b.agentName));
-  }, [propertyAssignments, tenantAssignments, showActiveOnly, searchTerm]);
+  }, [allAgents, propertyAssignments, tenantAssignments, showActiveOnly, searchTerm]);
   // Calculate stats
   const stats = useMemo(() => {
     return {

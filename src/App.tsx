@@ -27,6 +27,7 @@ import { PhoneOtpModal } from "./components/PhoneOtpModal";
 
 // ✅ LAZY ROUTES - Loaded on demand
 const RoomDetails = lazy(() => import("./pages/RoomDetails").then(m => ({ default: m.RoomDetails })));
+const ReviewAutoLoginPage = lazy(() => import("./pages/ReviewAutoLoginPage").then(m => ({ default: m.ReviewAutoLoginPage })));
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard").then(m => ({ default: m.Dashboard })));
 const OwnerInfo = lazy(() => import("./pages/OwnerInfo").then(m => ({ default: m.OwnerInfo })));
 const About_Page = lazy(() => import("./pages/About").then(m => ({ default: m.About })));
@@ -63,6 +64,10 @@ import { AdminRoute } from "./components/admin/AdminRoute";
 import { AgentRoute } from "./components/agent/AgentRoute";
 import { TenantRoute } from "./components/tenant/TenantRoute";
 
+// ✅ AGENT ROUTES - Lazy loaded
+const AgentLogin = lazy(() => import("./pages/agent/AgentLogin").then(m => ({ default: m.AgentLogin })));
+const AgentRegister = lazy(() => import("./pages/agent/AgentRegister").then(m => ({ default: m.AgentRegister })));
+
 import { useTheme } from "./hooks/useTheme";
 import { useInitializeAppData } from "./hooks/useInitializeAppData";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -76,6 +81,8 @@ const HIDE_LAYOUT_PATHS = [
   "/auth/forgot-password",
   "/auth/reset-password",
   "/admin/login",
+  "/agent/login",
+  "/agent/register",
 ];
 
 /**
@@ -224,6 +231,7 @@ function AppContent() {
               {/* ✅ LAZY ROUTES - Loaded on demand with Suspense */}
               <Route path="/rooms/:id" element={<Suspense fallback={<LazyLoadingFallback />}><RoomDetails /></Suspense>} />
               <Route path="/property/:id" element={<Suspense fallback={<LazyLoadingFallback />}><RoomDetails /></Suspense>} />
+              <Route path="/review/:propertyId" element={<Suspense fallback={<LazyLoadingFallback />}><ReviewAutoLoginPage /></Suspense>} />
               <Route path="/owners" element={<Suspense fallback={<LazyLoadingFallback />}><OwnerInfo /></Suspense>} />
               <Route path="/pricing" element={<Suspense fallback={<LazyLoadingFallback />}><Pricing /></Suspense>} />
 
@@ -276,6 +284,19 @@ function AppContent() {
           <Route path="/admin/login" element={
             <Suspense fallback={<LazyLoadingFallback />}>
               <AdminLogin />
+            </Suspense>
+          } />
+
+          {/* ✅ Agent Authentication Routes */}
+          <Route path="/agent/login" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <AgentLogin />
+            </Suspense>
+          } />
+
+          <Route path="/agent/register" element={
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <AgentRegister />
             </Suspense>
           } />
 

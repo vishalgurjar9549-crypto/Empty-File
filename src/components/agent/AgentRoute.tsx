@@ -26,9 +26,22 @@ export function AgentRoute({
     return <Navigate to="/auth/login" replace />;
   }
   // Check for AGENT role (case-insensitive)
-  const isAgent = user.role === 'AGENT' || user.role === 'agent';
+  const normalizedRole = user.role?.toUpperCase();
+  const isAgent = normalizedRole === 'AGENT';
+  
+  console.log('[AgentRoute] Role verification:', {
+    userId: user.id,
+    rawRole: user.role,
+    normalizedRole,
+    isAgent,
+    will: isAgent ? 'render dashboard' : 'redirect to home'
+  });
+  
   if (!isAgent) {
+    console.warn('[AgentRoute] Access denied - user is not an agent:', { role: user.role });
     return <Navigate to="/" replace />;
   }
+
+  console.log('[AgentRoute] ✅ Access granted - user is an agent');
   return <>{children}</>;
 }

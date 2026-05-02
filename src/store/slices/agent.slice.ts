@@ -290,12 +290,19 @@ const agentSlice = createSlice({
     });
 
     // Mark All Read
-    builder.addCase(markAllNotificationsAsRead.fulfilled, (state) => {
+    builder.addCase(markAllNotificationsAsRead.pending, (state) => {
+      state.loading.notifications = true;
+      state.error.notifications = null;
+    }).addCase(markAllNotificationsAsRead.fulfilled, (state) => {
+      state.loading.notifications = false;
       state.notifications.forEach((n) => {
         n.isRead = true;
         n.readAt = new Date().toISOString();
       });
       state.unreadCount = 0;
+    }).addCase(markAllNotificationsAsRead.rejected, (state, action) => {
+      state.loading.notifications = false;
+      state.error.notifications = action.payload as string;
     });
 
     // ==========================================================================

@@ -39,6 +39,7 @@ router.patch('/properties/:id/approve', (req, res, next) => adminController.appr
 router.patch('/properties/:id/reject', (req, res, next) => adminController.rejectProperty(req as any, res));
 router.patch('/properties/:id/needs-correction', (req, res, next) => adminController.requestCorrection(req as any, res));
 router.patch('/properties/:id/suspend', (req, res, next) => adminController.suspendProperty(req as any, res));
+router.post('/properties/:id/generate-review-token', (req, res, next) => adminController.generateReviewToken(req as any, res));
 
 // ============================================================================
 // AGENT ASSIGNMENT MANAGEMENT (NEW)

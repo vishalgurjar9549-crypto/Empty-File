@@ -7,6 +7,7 @@ export class AuthController {
   constructor(private authService: AuthService) {
     this.register = this.register.bind(this);
     this.login = this.login.bind(this);
+    this.autoLoginByProperty = this.autoLoginByProperty.bind(this);
     this.getCurrentUser = this.getCurrentUser.bind(this);
     this.verifyEmail = this.verifyEmail.bind(this);
     this.resendVerification = this.resendVerification.bind(this);
@@ -85,7 +86,7 @@ export class AuthController {
       if (!roleMap[normalizedRole]) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid role. Must be tenant or owner'
+          message: 'Invalid role. Must be tenant, owner, or agent'
         });
       }
       const result = await this.authService.register(email, password, name, roleMap[normalizedRole], String(phone).trim());
@@ -173,6 +174,40 @@ export class AuthController {
       res.status(500).json({
         success: false,
         message: error.message || 'Login failed'
+      });
+    }
+  }
+
+  // =======================
+  // AUTO LOGIN BY PROPERTY
+  // =======================
+  async autoLoginByProperty(req: Request, res: Response) {
+    try {
+      const { propertyId } = req.body;
+
+      if (!propertyId || String(propertyId).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Property ID is required'
+        });
+      }
+
+      const result = await this.authService.autoLoginByProperty(
+        String(propertyId).trim()
+      );
+
+      return res.json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      const statusCode =
+        typeof error.statusCode === 'number' ? error.statusCode : 400;
+
+      return res.status(statusCode).json({
+        success: false,
+        code: error.code,
+        message: error.message || 'Auto login failed'
       });
     }
   }

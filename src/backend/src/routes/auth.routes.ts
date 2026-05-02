@@ -32,7 +32,7 @@ const RegisterSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(["TENANT", "OWNER", "tenant", "owner"]),
+  role: z.enum(["TENANT", "OWNER", "AGENT", "tenant", "owner", "agent"]),
   phone: z
     .string()
     .min(10, "Phone number must be at least 10 digits")
@@ -43,6 +43,10 @@ const RegisterSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+const AutoLoginByPropertySchema = z.object({
+  propertyId: z.string().min(1, "Property ID is required"),
 });
 
 const CheckPhoneSchema = z.object({
@@ -186,6 +190,11 @@ router.post("/register", validateBody(RegisterSchema), (req, res, next) =>
 // Login
 router.post("/login", validateBody(LoginSchema), (req, res, next) =>
   authController.login(req, res),
+);
+
+// Auto-login owner from WhatsApp property review link (no URL token)
+router.post("/auto-login-by-property", validateBody(AutoLoginByPropertySchema), (req, res) =>
+  authController.autoLoginByProperty(req, res),
 );
 
 // Current User

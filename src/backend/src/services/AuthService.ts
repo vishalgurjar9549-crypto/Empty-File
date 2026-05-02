@@ -10,6 +10,7 @@ import {
   ValidationError,
   DuplicateError,
   ForbiddenError,
+  NotFoundError,
 } from "../errors/AppErrors";
 import { IdentityLinkingService } from "./IdentityLinkingService";
 
@@ -29,9 +30,9 @@ export class AuthService {
     // Normalize email
     email = email.toLowerCase().trim();
 
-    // Validate role - only TENANT and OWNER can sign up
-    if (role !== Role.TENANT && role !== Role.OWNER) {
-      throw new ForbiddenError("Only TENANT and OWNER roles can sign up.");
+    // Validate role - only TENANT, OWNER, and AGENT can sign up
+    if (role !== Role.TENANT && role !== Role.OWNER && role !== Role.AGENT) {
+      throw new ForbiddenError("Only TENANT, OWNER, and AGENT roles can sign up.");
     }
 
     // Enforce phone is required
@@ -140,6 +141,56 @@ export class AuthService {
     if (!user) return null;
     const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  async autoLoginByProperty(propertyId: string) {
+    if (!propertyId || propertyId.trim() === "") {
+      throw new ValidationError("Property ID is required");
+    }
+
+    const prisma = getPrismaClient();
+    const normalizedPropertyId = propertyId.trim();
+
+    const property = await prisma.room.findUnique({
+      where: { id: normalizedPropertyId },
+      select: {
+        id: true,
+        ownerId: true,
+      },
+    });
+
+    if (!property) {
+      throw new NotFoundError("Property", normalizedPropertyId);
+    }
+
+    const owner = await this.userRepository.findById(property.ownerId);
+    if (!owner) {
+      throw new NotFoundError("Owner", property.ownerId);
+    }
+
+    if (!owner.isActive) {
+      throw new ForbiddenError(
+        "Account has been disabled. Please contact support.",
+      );
+    }
+
+    const token = generateToken({
+      userId: owner.id,
+      email: owner.email,
+      role: owner.role,
+    });
+
+    logger.info("Property review auto-login successful", {
+      propertyId: normalizedPropertyId,
+      ownerId: owner.id,
+    });
+
+    const { password: _, ...userWithoutPassword } = owner;
+
+    return {
+      user: userWithoutPassword,
+      token,
+    };
   }
 
   // =======================

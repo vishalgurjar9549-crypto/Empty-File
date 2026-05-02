@@ -90,7 +90,7 @@ const trustItems = [
 // ==============================
 export function Home() {
   const cities = useAppSelector((state) => state.metadata?.cities ?? []);
-  const citiesLoading = useAppSelector((state) => state.metadata?.loading ?? false);
+  const citiesLoading = useAppSelector((state) => state.metadata?.citiesLoading ?? false);
 
   // ✅ Cities are already loaded globally at App.tsx initialization
   // No need for duplicate loading here

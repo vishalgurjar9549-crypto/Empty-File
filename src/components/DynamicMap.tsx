@@ -178,6 +178,18 @@ export const DynamicMap: React.FC<DynamicMapProps> = ({
             💡 <span className="font-medium">Tip:</span> Click the expand button to explore the full map interactively
           </p>
         </div>
+        {/* Get Directions Button */}
+        {latitude && longitude && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <span>📍</span>
+            <span>Get Directions</span>
+          </a>
+        )}
       </div>
 
       {/* Full-screen modal */}

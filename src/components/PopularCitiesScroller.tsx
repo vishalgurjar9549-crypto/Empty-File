@@ -1,8 +1,8 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { CityPillSkeleton } from "./ui/SkeletonLoader";
-import { getCityImage } from "../utils/cityImages";
+import { getCityImage, validateCityImageMapping } from "../utils/cityImages";
 
 type BackendCity = {
   id: string | number;
@@ -42,22 +42,48 @@ function chunkIntoTwoRows(items: CityItem[]) {
 }
 
 function mergeCitiesWithoutFallback(cities?: BackendCity[]): CityItem[] {
-  // ✅ STEP 2: NO FALLBACK TO FAKE DATA
-  // Use only real backend data with city images
+  // ✅ Use STRICT image resolution: mapped image > trusted backend > default
   const backendCities: CityItem[] =
-    cities?.map((city, index) => ({
-      id: city.id ?? city.name ?? `city-${index}`,
-      name: city.name,
-      state: city.state || "Popular destination",
-      totalListings: city.totalListings,
-      // ✅ Use getCityImage to provide real city images
-      image: city.image || getCityImage(city.name),
-    })) ?? [];
+    cities?.map((city, index) => {
+      // ✅ Pass BOTH city name and backend image to getCityImage
+      // getCityImage handles priority internally:
+      // 1. Mapped landmark image (if city has mapping)
+      // 2. Trusted backend image (if no mapping AND backend image is valid)
+      // 3. Default placeholder
+      const imageUrl = getCityImage(city.name, city.image);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[PopularCitiesScroller] City: "${city.name}"`,
+          {
+            resolvedImage: imageUrl.substring(0, 50) + "...",
+            backendProvided: city.image ? city.image.substring(0, 50) + "..." : "none",
+            hasMapping: imageUrl !== city.image,
+          }
+        );
+      }
+
+      return {
+        id: city.id ?? city.name ?? `city-${index}`,
+        name: city.name,
+        state: city.state || "Popular destination",
+        totalListings: city.totalListings,
+        // ✅ GUARANTEED: Every city has valid image (mapped or backend or default)
+        image: imageUrl,
+      };
+    }) ?? [];
 
   return backendCities;
 }
 
 function CityPill({ city }: { city: CityItem }) {
+  // ✅ State to handle image load errors
+  const [imageError, setImageError] = useState(false);
+  const handleImageError = () => {
+    console.warn(`[CityPill] Image failed to load for ${city.name}`, { imageUrl: city.image });
+    setImageError(true);
+  };
+
   return (
     <Link
       to={`/rooms?city=${encodeURIComponent(city.name)}`}
@@ -67,13 +93,23 @@ function CityPill({ city }: { city: CityItem }) {
       <div className="w-[132px] sm:w-[148px] md:w-[160px]">
         {/* Oval image */}
         <div className="relative mx-auto h-[176px] w-[132px] sm:h-[196px] sm:w-[148px] md:h-[210px] md:w-[160px] overflow-hidden rounded-[999px] bg-slate-200 dark:bg-zinc-900 ring-1 ring-slate-200/80 dark:ring-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.10)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 group-hover:-translate-y-1.5 group-hover:shadow-[0_18px_50px_rgba(0,0,0,0.18)] dark:group-hover:shadow-[0_18px_50px_rgba(0,0,0,0.38)]">
-          <img
-            src={city.image}
-            alt={city.name}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+          {/* ✅ Show placeholder if image fails to load */}
+          {imageError ? (
+            <div className="h-full w-full bg-gradient-to-br from-slate-300 to-slate-400 dark:from-zinc-700 dark:to-zinc-800 flex items-center justify-center">
+              <MapPin className="h-8 w-8 text-slate-500 dark:text-zinc-400 opacity-60" />
+            </div>
+          ) : (
+            <>
+              <img
+                src={city.image}
+                alt={city.name}
+                loading="lazy"
+                onError={handleImageError}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+            </>
+          )}
         </div>
 
         {/* Text */}
@@ -135,6 +171,30 @@ export default function PopularCitiesScroller({
     () => chunkIntoTwoRows(mergedCities),
     [mergedCities]
   );
+
+  // ✅ VALIDATION: Check city image mapping on mount (dev only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      const validation = validateCityImageMapping();
+      if (!validation.valid) {
+        console.warn(
+          "[PopularCitiesScroller] ⚠️ City image mapping issues detected:",
+          {
+            duplicateImages: Object.keys(validation.duplicates).length,
+            duplicates: validation.duplicates,
+          }
+        );
+      } else {
+        console.log("[PopularCitiesScroller] ✅ City image mapping validated — all unique");
+      }
+
+      // Log city image distribution
+      if (mergedCities.length > 0) {
+        const imageCount = new Set(mergedCities.map((c) => c.image)).size;
+        console.log(`[PopularCitiesScroller] ${mergedCities.length} cities, ${imageCount} unique images`);
+      }
+    }
+  }, [mergedCities]);
 
   const pauseAndScroll = (direction: "left" | "right") => {
     const amount = 420;

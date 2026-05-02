@@ -92,19 +92,80 @@ export class RoomController {
     try {
       const cityParam = typeof req.query.city === 'string' ? req.query.city : undefined;
       const normalizedCity = cityParam ? normalizeCity(cityParam) : undefined;
-      const roomTypeParam =
-        typeof req.query.roomType === 'string' && req.query.roomType.trim().length > 0
-          ? req.query.roomType.trim()
+      
+      // ✅ FIX: Extract BOTH roomType (single) AND roomTypes (multiple)
+      // Priority: roomTypes (multiple) > roomType (single)
+      let normalizedRoomType: string | undefined = undefined;
+      let normalizedRoomTypes: string[] | undefined = undefined;
+      
+      // Handle roomTypes (plural - multiple values, comma-separated)
+      if (req.query.roomTypes) {
+        const roomTypesParam =
+          Array.isArray(req.query.roomTypes)
+            ? req.query.roomTypes
+            : typeof req.query.roomTypes === 'string'
+              ? [req.query.roomTypes]
+              : [];
+        
+        const rawTypes = roomTypesParam
+          .flatMap((rt: any) => {
+            // Support both ?roomTypes=4BHK,3BHK (CSV) and ?roomTypes=4BHK&roomTypes=3BHK
+            return String(rt).split(',');
+          })
+          .map((rt: string) => rt.trim())
+          .filter((rt: string) => rt.length > 0);
+        
+        // Normalize room types using ROOM_TYPE_MAP
+        const mapped = rawTypes
+          .map((rt: string) => ROOM_TYPE_MAP[rt.toLowerCase()])
+          .filter((rt: any) => rt !== undefined);
+        
+        if (mapped.length > 0) {
+          normalizedRoomTypes = mapped;
+          // ✅ DEBUG: Log parsed room types
+          logger.info('🔍 ROOMTYPES FILTER PARSED', {
+            received: req.query.roomTypes,
+            rawTypes,
+            normalized: normalizedRoomTypes
+          });
+        }
+        
+        // Validate: at least one valid type must be provided
+        if (rawTypes.length > 0 && mapped.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid room types provided',
+            received: rawTypes
+          });
+        }
+      } 
+      // Fallback: Handle single roomType (for backward compatibility)
+      else if (req.query.roomType) {
+        const roomTypeParam =
+          typeof req.query.roomType === 'string' && req.query.roomType.trim().length > 0
+            ? req.query.roomType.trim()
+            : undefined;
+        
+        normalizedRoomType = roomTypeParam
+          ? ROOM_TYPE_MAP[roomTypeParam.toLowerCase()]
           : undefined;
-      const normalizedRoomType = roomTypeParam
-        ? ROOM_TYPE_MAP[roomTypeParam.toLowerCase()]
-        : undefined;
-      if (roomTypeParam && !normalizedRoomType) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid room type'
-        });
+        
+        if (roomTypeParam && !normalizedRoomType) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid room type'
+          });
+        }
+        
+        // ✅ DEBUG: Log single room type
+        if (normalizedRoomType) {
+          logger.info('🔍 ROOMTYPE FILTER PARSED (LEGACY)', {
+            received: req.query.roomType,
+            normalized: normalizedRoomType
+          });
+        }
       }
+      
       const sortParam =
         typeof req.query.sort === 'string' && req.query.sort.trim().length > 0
           ? req.query.sort.trim()
@@ -144,12 +205,15 @@ export class RoomController {
         ? req.query.cursor.trim() 
         : undefined;
       
+      // ✅ FIX: Include roomTypes in filters if present
       const filters: RoomFilters = {
         // Legacy page support (convert to cursor in repository)
         page: Number(req.query.page ?? 1),
         limit: Number(req.query.limit ?? 20),
         city: normalizedCity,
         roomType: normalizedRoomType,
+        // ✅ NEW: Add roomTypes (multiple) to filters
+        ...(normalizedRoomTypes ? { roomTypes: normalizedRoomTypes } : {}),
         sort: sortParam as RoomFilters["sort"],
         minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
         maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined,

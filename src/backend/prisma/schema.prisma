@@ -45,6 +45,7 @@ model User {
   emailOtps                EmailOtp[]                @relation("UserEmailOtps")
   idempotencyRecords       IdempotencyRecord[]
   phoneOtps                PhoneOtp[]
+  propertyReviewTokens     PropertyReviewToken[]     @relation("PropertyReviewTokens")
 }
 
 model Room {
@@ -82,6 +83,7 @@ model Room {
   reviews                  Review[]                  @relation("RoomReviews")
   owner                    User                      @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   events                   Event[]
+  propertyReviewTokens     PropertyReviewToken[]     @relation("PropertyReviewTokens")
 
   @@index([city])
   @@index([roomType])
@@ -232,6 +234,28 @@ model Payment {
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
+}
+
+model AssistedRequest {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  city      String
+  budget    Int?
+  amount    Int      @default(50000) // Always ₹500 (50000 paise)
+  paymentId String
+  orderId   String
+  status    String   @default("PAID")
+  source    String   @default("ASSISTED_UI")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([city])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paymentId])
+  @@index([orderId])
+  @@map("assisted_requests")
 }
 
 model AgentPropertyAssignment {
@@ -456,6 +480,34 @@ model Favorite {
   @@unique([userId, roomId])
   @@index([userId])
   @@index([roomId])
+}
+
+model PropertyReviewToken {
+  id        String    @id @default(uuid())
+  propertyId String
+  ownerId   String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  
+  property  Room      @relation("PropertyReviewTokens", fields: [propertyId], references: [id], onDelete: Cascade)
+  owner     User      @relation("PropertyReviewTokens", fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([expiresAt])
+  @@index([ownerId])
+  @@index([propertyId, expiresAt, usedAt])
+}
+
+model ImportProgress {
+  id               String   @id @default(uuid())
+  fileName         String   @unique
+  lastProcessedRow Int      @default(0)
+  totalInserted    Int      @default(0)
+  totalSkipped     Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 enum BookingStatus {

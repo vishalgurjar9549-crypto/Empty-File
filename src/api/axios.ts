@@ -6,7 +6,7 @@ import axios, { InternalAxiosRequestConfig, AxiosError } from 'axios';
 // const API_BASE_URL = import.meta?.env?.VITE_API_URL || 'https://kangaroo-rooms-backend.onrender.com/api';
 
 const getBaseURL = () =>
-  import.meta.env.VITE_API_URL || 'https://kangaroo-rooms-backend.onrender.com/api';
+  import.meta.env.VITE_API_URL;
 console.log('Using API Base URL:', getBaseURL());
 console.log("import.meta.env = ", import.meta.env);
 console.log("VITE_API_URL = ", import.meta.env.VITE_API_URL);

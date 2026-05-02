@@ -155,10 +155,22 @@ export const FullScreenMapModal: React.FC<FullScreenMapModalProps> = ({
           <div ref={mapContainer} className="flex-1 bg-slate-100 dark:bg-slate-700" />
 
           {/* Footer info */}
-          <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-600 dark:text-slate-400">
-            <span className="font-medium">Coordinates:</span> {latitude.toFixed(4)}, {longitude.toFixed(4)}
-            <span className="mx-2">•</span>
-            <span>Use scroll wheel or two-finger pinch to zoom | Drag to pan | Press ESC to close</span>
+          <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+            <div>
+              <span className="font-medium">Coordinates:</span> {latitude.toFixed(4)}, {longitude.toFixed(4)}
+              <span className="mx-2">•</span>
+              <span>Use scroll wheel or two-finger pinch to zoom | Drag to pan | Press ESC to close</span>
+            </div>
+            {/* Get Directions Button */}
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-4 inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+            >
+              <span>📍</span>
+              <span>Get Directions</span>
+            </a>
           </div>
         </div>
       </div>

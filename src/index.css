@@ -313,14 +313,22 @@
     gap: var(--space-5);
     min-height: 88px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: linear-gradient(135deg, var(--color-surface) 0%, rgba(201, 168, 76, 0.02) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-surface) 0%,
+      rgba(201, 168, 76, 0.02) 100%
+    );
   }
 
   .stat-card:hover {
     transform: translateY(-4px) scale(1.02);
     box-shadow: var(--shadow-lg);
     border-color: rgba(201, 168, 76, 0.28);
-    background: linear-gradient(135deg, var(--color-surface) 0%, rgba(201, 168, 76, 0.05) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-surface) 0%,
+      rgba(201, 168, 76, 0.05) 100%
+    );
   }
 
   /* Stat value - increased visual weight */
@@ -343,7 +351,8 @@
 
   .stat-card:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px var(--color-gold-soft), 0 8px 20px rgba(201, 168, 76, 0.12);
+    box-shadow: 0 0 0 3px var(--color-gold-soft),
+      0 8px 20px rgba(201, 168, 76, 0.12);
   }
 
   /* Icon wrapper for stat cards - enhanced */
@@ -351,14 +360,22 @@
     @apply flex-shrink-0 rounded-[var(--radius-md)] flex items-center justify-center;
     width: 56px;
     height: 56px;
-    background: linear-gradient(135deg, rgba(201, 168, 76, 0.1) 0%, rgba(201, 168, 76, 0.05) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(201, 168, 76, 0.1) 0%,
+      rgba(201, 168, 76, 0.05) 100%
+    );
     border: 1.5px solid rgba(201, 168, 76, 0.2);
     color: var(--color-gold);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .stat-card:hover .stat-icon {
-    background: linear-gradient(135deg, rgba(201, 168, 76, 0.15) 0%, rgba(201, 168, 76, 0.08) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(201, 168, 76, 0.15) 0%,
+      rgba(201, 168, 76, 0.08) 100%
+    );
     border-color: rgba(201, 168, 76, 0.28);
     transform: scale(1.08);
   }
@@ -383,6 +400,15 @@
     background: rgba(201, 168, 76, 0.04);
     transition: all 0.2s ease;
   }
+  .compact-metric.rent {
+    background: rgba(16, 185, 129, 0.06); /* subtle green */
+    border: 1px solid rgba(16, 185, 129, 0.15);
+  }
+
+  .compact-metric.rent .compact-metric-value {
+    font-size: 18px;
+    font-weight: 800;
+  }
 
   .compact-metric-label {
     display: flex;
@@ -400,9 +426,11 @@
     font-weight: 700;
     color: var(--color-text-primary);
     line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+    /* FIX */
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
   }
 
   /* Compact badge in property cards */
@@ -608,7 +636,8 @@
 
   .btn-icon:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08),
+      0 2px 6px rgba(0, 0, 0, 0.06);
   }
 
   /* ─── BADGE COMPONENTS ─── */
@@ -844,10 +873,14 @@
     display: grid;
     grid-template-columns: 100px minmax(0, 1fr);
     column-gap: var(--space-4);
-    row-gap: var(--space-6);
-    padding: var(--space-6);
+    padding: var(--space-5);
+    row-gap: var(--space-5);
     align-items: start;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      transparent 100%
+    );
   }
 
   .owner-property-card-image {
@@ -1098,7 +1131,11 @@
     @apply rounded-lg flex items-center justify-center flex-shrink-0;
     width: 44px;
     height: 44px;
-    background: linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(249, 115, 22, 0.06) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(249, 115, 22, 0.12) 0%,
+      rgba(249, 115, 22, 0.06) 100%
+    );
     border: 1px solid rgba(249, 115, 22, 0.15);
     color: #f97316;
   }
@@ -1165,7 +1202,11 @@
   /* ✅ STEP 2: Improve Content Hierarchy - Admin message card (visually dominant) */
   .admin-message-card {
     @apply rounded-[var(--radius-md)] space-y-3;
-    background: linear-gradient(135deg, rgba(201, 168, 76, 0.04) 0%, rgba(201, 168, 76, 0.02) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(201, 168, 76, 0.04) 0%,
+      rgba(201, 168, 76, 0.02) 100%
+    );
     border-left: 3px solid rgba(249, 115, 22, 0.4);
     padding: var(--space-5);
     border: 1px solid rgba(201, 168, 76, 0.08);

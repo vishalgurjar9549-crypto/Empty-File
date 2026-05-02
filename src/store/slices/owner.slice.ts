@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { ownerApi } from '../../api/owner.api';
+import { ownerService } from '../../services';
 import { OwnerSummary, Room, Booking, PropertyNote, OwnerActivityItem } from '../../types/api.types';
 import { updateBookingStatus } from './bookings.slice';
 
@@ -42,7 +42,7 @@ export const fetchOwnerSummary = createAsyncThunk('owner/fetchSummary', async (_
   rejectWithValue
 }) => {
   try {
-    const summary = await ownerApi.getSummary();
+    const summary = await ownerService.getSummary();
     return summary;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch summary';
@@ -53,7 +53,7 @@ export const fetchOwnerRooms = createAsyncThunk('owner/fetchRooms', async (_, {
   rejectWithValue
 }) => {
   try {
-    const rooms = await ownerApi.getMyRooms();
+    const rooms = await ownerService.getMyRooms();
     console.log('Rooms', rooms);
     return rooms;
   } catch (error: any) {
@@ -65,7 +65,7 @@ export const fetchOwnerBookings = createAsyncThunk('owner/fetchBookings', async 
   rejectWithValue
 }) => {
   try {
-    const bookings = await ownerApi.getMyBookings();
+    const bookings = await ownerService.getMyBookings();
     return bookings;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch bookings';
@@ -78,7 +78,7 @@ export const fetchPropertyNotes = createAsyncThunk('owner/fetchPropertyNotes', a
   rejectWithValue
 }) => {
   try {
-    const notes = await ownerApi.getPropertyNotes(propertyId);
+    const notes = await ownerService.getPropertyNotes(propertyId);
     return {
       propertyId,
       notes
@@ -106,7 +106,7 @@ export const fetchOwnerActivity = createAsyncThunk('owner/fetchActivity', async 
   rejectWithValue
 }) => {
   try {
-    const activity = await ownerApi.getRecentActivity();
+    const activity = await ownerService.getRecentActivity();
     return activity;
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to fetch activity';

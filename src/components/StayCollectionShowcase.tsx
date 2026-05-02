@@ -82,8 +82,8 @@ export function StayCollectionShowcase() {
                 style={{ color: "#f0e6c8", fontFamily: "Georgia, serif" }}
               >
                 Premium{" "}
-                <span style={{ color: gold }}>homes & palaces</span>{" "}
-                to rent or buy
+                <span style={{ color: gold }}>Property & Stays</span>{" "}
+                 for rent
               </h2>
               <p className="mt-1.5 text-xs sm:text-[13px] leading-relaxed max-w-md" style={{ color: "rgba(240,230,200,0.45)" }}>
                 Verified properties across India — curated for comfort, elegance, and lasting value.

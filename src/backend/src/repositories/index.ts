@@ -12,6 +12,7 @@ import { PrismaBookingRepository } from './PrismaBookingRepository';
 import { PrismaTenantSubscriptionRepository } from './PrismaTenantSubscriptionRepository';
 import { PrismaPaymentRepository } from './PrismaPaymentRepository';
 import { PrismaPropertyViewRepository } from './PrismaPropertyViewRepository';
+import { PrismaAssistedRequestRepository } from './PrismaAssistedRequestRepository';
 
 // Singleton Prisma
 const prisma = getPrismaClient();
@@ -23,6 +24,7 @@ export const bookingRepository = new PrismaBookingRepository(prisma);
 export const tenantSubscriptionRepository = new PrismaTenantSubscriptionRepository(prisma);
 export const paymentRepository = new PrismaPaymentRepository(prisma);
 export const propertyViewRepository = new PrismaPropertyViewRepository(prisma);
+export const assistedRequestRepository = new PrismaAssistedRequestRepository(prisma);
 
 // Export prisma if needed
 export { prisma };

@@ -250,7 +250,8 @@ export function BookingModal({ room, isOpen, onClose }: BookingModalProps) {
           type: 'success'
         }));
       } else if (createBooking.rejected.match(action)) {
-        const errorMsg = (action.payload as any)?.message || 'Failed to create booking. Please try again.';
+        console.log('Booking failed:', action);
+        const errorMsg = (action.payload as any) ;
         dispatch(showToast({
           message: errorMsg,
           type: 'error'

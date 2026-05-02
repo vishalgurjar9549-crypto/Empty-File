@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState, useId } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId,
+} from "react";
 import {
   X,
   ChevronDown,
@@ -17,6 +24,7 @@ import { loadAllCities } from "../store/slices/metadata.slice";
 import { showToast } from "../store/slices/ui.slice";
 import ImageUpload from "./ImageUpload";
 import MapLocationPicker from "./MapLocationPicker";
+import AmenitiesForm from "./AmenitiesForm";
 import FullscreenLoader from "./ui/Loader";
 import { FormGrid } from "./ui/FormGrid";
 import { Room, IdealFor, RoomType, GenderPreference } from "../types/api.types";
@@ -271,8 +279,6 @@ export function EditPropertyModal({
     );
   }, [allCities, search]);
 
-  if (!isOpen) return null;
-
   const clearError = (field: string) => {
     setErrors((prev) => {
       if (!prev[field]) return prev;
@@ -297,72 +303,62 @@ export function EditPropertyModal({
     return changed;
   };
 
-  const validateChangedFields = (data: Partial<FormDataType>) => {
+  const validate = useCallback((focusOnError = true) => {
     const newErrors: Record<string, string> = {};
 
-    if (
-      "title" in data &&
-      data.title !== undefined &&
-      data.title.trim().length < 5
-    ) {
+    if (formData.title.trim().length < 5) {
       newErrors.title = "Title must be at least 5 characters.";
     }
 
-    if ("city" in data && !data.city) {
+    if (!formData.city) {
       newErrors.city = "Please select a city.";
     }
 
-    if (
-      "location" in data &&
-      data.location !== undefined &&
-      data.location.trim().length < 3
-    ) {
+    if (formData.location.trim().length < 3) {
       newErrors.location = "Location is required.";
     }
 
-    const mapChanged = "latitude" in data || "longitude" in data;
-
     if (
-      mapChanged &&
-      (formData.latitude === null ||
-        formData.longitude === null ||
-        !Number.isFinite(formData.latitude) ||
-        !Number.isFinite(formData.longitude))
+      formData.latitude === null ||
+      formData.longitude === null ||
+      !Number.isFinite(formData.latitude) ||
+      !Number.isFinite(formData.longitude)
     ) {
       newErrors.mapLocation = "Please pin the property on the map.";
     }
 
     if (
-      "pricePerMonth" in data &&
-      (!data.pricePerMonth ||
-        Number(data.pricePerMonth) <= 0 ||
-        !Number.isFinite(Number(data.pricePerMonth)))
+      !formData.pricePerMonth ||
+      Number(formData.pricePerMonth) <= 0 ||
+      !Number.isFinite(Number(formData.pricePerMonth))
     ) {
       newErrors.pricePerMonth = "Enter a valid monthly rent.";
     }
 
-    if (
-      "description" in data &&
-      data.description !== undefined &&
-      data.description.trim().length < 20
-    ) {
-      const remaining = 20 - data.description.trim().length;
+    if (formData.description.trim().length < 20) {
+      const remaining = 20 - formData.description.trim().length;
       newErrors.description = `${remaining} more character${
         remaining !== 1 ? "s" : ""
       } required.`;
     }
 
-    if ("idealFor" in data && data.idealFor && data.idealFor.length === 0) {
+    if (!formData.roomType) {
+      newErrors.roomType = "Please select a room type.";
+    }
+
+    if (formData.idealFor.length === 0) {
       newErrors.idealFor = "Select at least one tenant type.";
     }
 
-    if ("images" in data && data.images && data.images.length < 3) {
+    if (formData.images.length < 3) {
       newErrors.images = "Upload at least 3 property images.";
     }
 
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
+      if (!focusOnError) return false;
+
       const firstKey = Object.keys(newErrors)[0];
       const el = fieldRefs.current[firstKey];
 
@@ -377,7 +373,14 @@ export function EditPropertyModal({
     }
 
     return true;
-  };
+  }, [formData]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    validate(false);
+  }, [isOpen, validate]);
+
+  if (!isOpen) return null;
 
   const handleSafeClose = () => {
     if (isUpdating) return;
@@ -396,6 +399,8 @@ export function EditPropertyModal({
     e.preventDefault();
     if (isUpdating) return;
 
+    if (!validate()) return;
+
     const changedData = getChangedFields();
 
     if (Object.keys(changedData).length === 0) {
@@ -407,8 +412,6 @@ export function EditPropertyModal({
       );
       return;
     }
-
-    if (!validateChangedFields(changedData)) return;
 
     // const payload = {
     //   ...changedData,
@@ -1106,44 +1109,15 @@ export function EditPropertyModal({
                   subtitle="Highlight the facilities available at this property."
                   icon={<Home className="h-5 w-5" />}
                 >
-                  <fieldset
-                    ref={(el) => (fieldRefs.current.amenities = el)}
-                    className="space-y-3"
-                  >
-                    <FormGrid columns={{ sm: 2, md: 3 }} gap="compact">
-                      {amenities.map((amenity) => {
-                        const active = formData.amenities.includes(amenity);
-
-                        return (
-                          <label
-                            key={amenity}
-                            className={`group flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition-all ${
-                              active
-                                ? "border-[rgba(212,175,55,0.35)] bg-[rgba(212,175,55,0.10)] text-slate-900 dark:bg-[rgba(212,175,55,0.08)] dark:text-white"
-                                : "border-[rgba(212,175,55,0.14)] bg-white/70 hover:bg-[rgba(212,175,55,0.05)] dark:bg-[#15110b]"
-                            }`}
-                          >
-                            <div
-                              className={`flex h-5 w-5 items-center justify-center rounded-md border transition ${
-                                active
-                                  ? "border-[rgba(212,175,55,0.9)] bg-[rgba(212,175,55,0.9)] text-black"
-                                  : "border-slate-300 dark:border-slate-600"
-                              }`}
-                            >
-                              {active && <Check className="h-3.5 w-3.5" />}
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={active}
-                              onChange={() => toggleAmenity(amenity)}
-                              className="sr-only"
-                            />
-                            <span>{amenity}</span>
-                          </label>
-                        );
-                      })}
-                    </FormGrid>
-                  </fieldset>
+                  <AmenitiesForm
+                    selectedAmenities={formData.amenities}
+                    onAmenitiesChange={(amenityIds) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        amenities: amenityIds,
+                      }));
+                    }}
+                  />
                 </SectionCard>
 
                 {/* Footer Actions */}
@@ -1186,7 +1160,7 @@ export function EditPropertyModal({
                         ) : (
                           <>
                             <Check className="h-4 w-4" />
-                            Save Changes
+                            Update Property
                           </>
                         )}
                       </button>
