@@ -49,7 +49,7 @@ async function processChunk(rows: any[]) {
       if (!user) {
         user = await prisma.user.create({
           data: {
-            name: item.ownerName || "Owner",
+            name: item.ownerName,
             phone,
             email: item.ownerEmail || `${phone}@imported.com`,
             password: "imported_user",
@@ -95,7 +95,7 @@ async function processChunk(rows: any[]) {
             ? item.imageUrl.split(",").map((url: string) => url.trim())
             : [],
 
-          idealFor: ["ANY"],
+          idealFor: [],
 
           ownerId: user.id,
 
@@ -111,7 +111,6 @@ async function processChunk(rows: any[]) {
             adminName: "Admin",
             createdAt: new Date().toISOString(),
           },
-
         },
       });
 

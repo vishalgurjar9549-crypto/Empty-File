@@ -458,136 +458,180 @@ export class PrismaRoomRepository implements IRoomRepository {
         }
       }
       
-      let orderBy:
-        | Prisma.RoomOrderByWithRelationInput
-        | Prisma.RoomOrderByWithRelationInput[];
-      if (sortNorm === "price_low") {
-        orderBy = [{ pricePerMonth: "asc" }, { id: "asc" }];
-      } else if (sortNorm === "price_high") {
-        orderBy = [{ pricePerMonth: "desc" }, { id: "asc" }];
-      } else {
-        orderBy = [{ createdAt: "desc" }, { id: "asc" }];
+      const whereSql: Prisma.Sql[] = [];
+
+      if (where.city && typeof where.city === "object" && "equals" in where.city) {
+        whereSql.push(Prisma.sql`LOWER(r.city) = LOWER(${where.city.equals as string})`);
       }
 
-      const include = {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      };
+      if (where.roomType && typeof where.roomType === "object" && "in" in where.roomType) {
+        whereSql.push(Prisma.sql`r."roomType" IN (${Prisma.join(where.roomType.in as string[])})`);
+      } else if (typeof where.roomType === "string") {
+        whereSql.push(Prisma.sql`r."roomType" = ${where.roomType}`);
+      }
 
-      const total = await this.prisma.room.count({
-        where,
-      });
-      
-      // ✅ DEBUG: Log complete WHERE clause and query count
+      if (where.genderPreference) {
+        whereSql.push(Prisma.sql`r."genderPreference" = ${where.genderPreference as string}`);
+      }
+
+      if (where.idealFor && typeof where.idealFor === "object" && "hasSome" in where.idealFor) {
+        whereSql.push(Prisma.sql`r."idealFor" && ARRAY[${Prisma.join(where.idealFor.hasSome as string[])}]::text[]`);
+      }
+
+      if (where.pricePerMonth && typeof where.pricePerMonth === "object") {
+        const priceFilter = where.pricePerMonth as { gte?: number; lte?: number };
+        if (priceFilter.gte !== undefined) {
+          whereSql.push(Prisma.sql`r."pricePerMonth" >= ${priceFilter.gte}`);
+        }
+        if (priceFilter.lte !== undefined) {
+          whereSql.push(Prisma.sql`r."pricePerMonth" <= ${priceFilter.lte}`);
+        }
+      }
+
+      if (where.isPopular !== undefined) {
+        whereSql.push(Prisma.sql`r."isPopular" = ${Boolean(where.isPopular)}`);
+      }
+
+      if (where.isActive !== undefined) {
+        whereSql.push(Prisma.sql`r."isActive" = ${Boolean(where.isActive)}`);
+      }
+
+      if (where.reviewStatus) {
+        whereSql.push(Prisma.sql`r."reviewStatus" = ${where.reviewStatus as string}::"ReviewStatus"`);
+      }
+
+      const whereClause =
+        whereSql.length > 0
+          ? Prisma.sql`WHERE ${Prisma.join(whereSql, " AND ")}`
+          : Prisma.empty;
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const metricTypeFilter =
+        sortNorm === "most_viewed"
+          ? Prisma.sql`e.type = ${EventType.PROPERTY_VIEW}::"EventType"`
+          : sortNorm === "most_contacted"
+          ? Prisma.sql`e.type IN (
+              ${EventType.CONTACT_UNLOCK}::"EventType",
+              ${EventType.CONTACT_ACCESS}::"EventType"
+            )`
+          : Prisma.sql`false`;
+      const orderBySql =
+        sortNorm === "price_low"
+          ? Prisma.sql`fr."pricePerMonth" ASC, fr.id ASC`
+          : sortNorm === "price_high"
+          ? Prisma.sql`fr."pricePerMonth" DESC, fr.id ASC`
+          : sortNorm === "most_viewed" || sortNorm === "most_contacted"
+          ? Prisma.sql`COALESCE(dm.metric_count, 0) DESC, fr."createdAt" DESC, fr.id ASC`
+          : Prisma.sql`fr."createdAt" DESC, fr.id ASC`;
+
+      const rawResults = await this.prisma.$queryRaw<
+        Array<PrismaRoom & {
+          totalCount: number;
+          weeklyViews: number;
+          weeklyContacts: number;
+          sortPosition: bigint | number;
+        }>
+      >`
+        WITH filtered_rooms AS MATERIALIZED (
+          SELECT
+            r.id,
+            r.title,
+            r.description,
+            r.city,
+            r.location,
+            r.landmark,
+            r."pricePerMonth",
+            r."roomType",
+            r."idealFor",
+            r.amenities,
+            r.images,
+            r.rating,
+            r."reviewsCount",
+            r."reviewStatus",
+            r."isActive",
+            r."isPopular",
+            r."adminFeedback",
+            r."genderPreference",
+            r."ownerId",
+            r."createdAt",
+            r."updatedAt",
+            r.latitude,
+            r.longitude,
+            COUNT(*) OVER()::int AS "totalCount"
+          FROM "Room" r
+          ${whereClause}
+        ),
+        demand_metric AS (
+          SELECT
+            e."propertyId",
+            COUNT(*)::int AS metric_count
+          FROM events e
+          JOIN filtered_rooms fr ON fr.id = e."propertyId"
+          WHERE e."createdAt" >= ${sevenDaysAgo}
+            AND ${metricTypeFilter}
+          GROUP BY e."propertyId"
+        ),
+        ranked_rooms AS MATERIALIZED (
+          SELECT
+            fr.*,
+            ROW_NUMBER() OVER (ORDER BY ${orderBySql}) AS "sortPosition"
+          FROM filtered_rooms fr
+          LEFT JOIN demand_metric dm ON dm."propertyId" = fr.id
+          ORDER BY ${orderBySql}
+          OFFSET ${skip}
+          LIMIT ${limit + 1}
+        ),
+        demand_summary AS (
+          SELECT
+            e."propertyId",
+            COUNT(*) FILTER (
+              WHERE e.type = ${EventType.PROPERTY_VIEW}::"EventType"
+            )::int AS "weeklyViews",
+            COUNT(*) FILTER (
+              WHERE e.type IN (
+                ${EventType.CONTACT_UNLOCK}::"EventType",
+                ${EventType.CONTACT_ACCESS}::"EventType"
+              )
+            )::int AS "weeklyContacts"
+          FROM events e
+          JOIN ranked_rooms rr ON rr.id = e."propertyId"
+          WHERE e."createdAt" >= ${sevenDaysAgo}
+            AND e.type IN (
+              ${EventType.PROPERTY_VIEW}::"EventType",
+              ${EventType.CONTACT_UNLOCK}::"EventType",
+              ${EventType.CONTACT_ACCESS}::"EventType"
+            )
+          GROUP BY e."propertyId"
+        )
+        SELECT
+          rr.*,
+          COALESCE(ds."weeklyViews", 0)::int AS "weeklyViews",
+          COALESCE(ds."weeklyContacts", 0)::int AS "weeklyContacts"
+        FROM ranked_rooms rr
+        LEFT JOIN demand_summary ds ON ds."propertyId" = rr.id
+        ORDER BY rr."sortPosition"
+      `;
+
+      let total = rawResults[0]?.totalCount ?? 0;
+      if (rawResults.length === 0 && skip > 0) {
+        total = await this.prisma.room.count({ where });
+      }
+
       logger.info('🔍 REPOSITORY: DB Query executed', {
         whereClause: JSON.stringify(where, null, 2),
         totalMatchingRecords: total,
         limit,
-        
       });
 
-      // ✅ CURSOR PAGINATION FOR MOST_VIEWED/MOST_CONTACTED
-      if (sortNorm === "most_viewed" || sortNorm === "most_contacted") {
-        // ✅ SAFE OPTIMIZATION: Fetch ranked IDs via Prisma groupBy with in-memory sorting
-        // This avoids complex raw SQL while maintaining good performance
-        try {
-          const isViewMetric = sortNorm === "most_viewed";
-          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-          // STEP 1: Get event aggregation for ranking
-          const eventAggregation = await this.prisma.event.groupBy({
-            by: ['propertyId'],
-            where: {
-              type: isViewMetric
-                ? EventType.PROPERTY_VIEW
-                : {
-                    in: [EventType.CONTACT_UNLOCK, EventType.CONTACT_ACCESS],
-                  },
-              createdAt: { gte: sevenDaysAgo },
-              propertyId: { not: null }, // ✅ Filter out null propertyId entries
-            },
-            _count: {
-              _all: true,
-            },
-          });
-
-          // STEP 2: Sort by count in memory (since Prisma groupBy doesn't support count orderBy)
-          const sortedByDemand = eventAggregation
-            .sort((a, b) => b._count._all - a._count._all);
-
-          // STEP 3: Apply skip/take pagination to ranked IDs
-          const rankedRoomIds = sortedByDemand
-            .slice(skip, skip + limit + 1) // Get limit + 1 to detect next page
-            .map(agg => agg.propertyId)
-            .filter(Boolean) as string[];
-
-          if (rankedRoomIds.length === 0) {
-            return { rooms: [], total, hasNextPage: false };
-          }
-
-          // STEP 4: Detect if there's a next page
-          const hasNextPage = rankedRoomIds.length > limit;
-          const pageRoomIds = hasNextPage ? rankedRoomIds.slice(0, limit) : rankedRoomIds;
-
-          // STEP 5: Fetch full room data for ranked IDs only
-          const raw = await this.prisma.room.findMany({
-            where: { id: { in: pageRoomIds }, ...where },
-            include,
-          });
-
-          // STEP 6: Reorder by rank (maintain the event-based ranking order)
-          const orderedRows = pageRoomIds
-            .map(id => raw.find(room => room.id === id))
-            .filter(Boolean) as typeof raw;
-
-          const rooms = await this.attachDemand(
-            orderedRows.map(r => this.toDomain(r))
-          );
-
-          return { rooms, total, hasNextPage };
-        } catch (error) {
-          logger.warn('Most viewed/contacted sorting failed, falling back to standard sorting', {
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-            sortNorm,
-          });
-
-          // Safe fallback: Use standard skip/take pagination
-          const rawFallback = await this.prisma.room.findMany({
-            where,
-            skip,
-            take: limit + 1, // Get limit + 1 to detect next page
-            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-            include,
-          });
-          const hasNextPage = rawFallback.length > limit;
-          const pageRows = hasNextPage ? rawFallback.slice(0, limit) : rawFallback;
-          const rooms = await this.attachDemand(
-            pageRows.map(r => this.toDomain(r))
-          );
-
-          return { rooms, total, hasNextPage };
-        }
-      }
-
-      // ✅ SKIP/TAKE PAGINATION: Main query with stable ordering
-      const rawResults = await this.prisma.room.findMany({
-        where,
-        skip,
-        take: limit + 1, // Get limit + 1 to detect if there's a next page
-        orderBy,
-        include,
-      });
-
-      // ✅ Check if there are more pages
       const hasNextPage = rawResults.length > limit;
       const pageRows = hasNextPage ? rawResults.slice(0, limit) : rawResults;
 
-      const rooms = await this.attachDemand(pageRows.map((r) => this.toDomain(r)));
+      const rooms = pageRows.map((row) => ({
+        ...this.toDomain(row as PrismaRoom),
+        demand: {
+          weeklyViews: row.weeklyViews,
+          weeklyContacts: row.weeklyContacts,
+        },
+      }));
 
       return {
         rooms,

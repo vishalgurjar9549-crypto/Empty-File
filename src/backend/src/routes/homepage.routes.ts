@@ -1,9 +1,7 @@
-import { Router, Request, Response } from 'express';
-import { prisma as prismaInstance } from '../utils/prisma';
-import { getPrismaClient } from '../utils/prisma';
-import { ReviewStatus } from '@prisma/client';
-import { logger } from '../utils/logger';
-import { StatsService } from '../services/StatsService';
+import { Router, Request, Response } from "express";
+import { ReviewStatus } from "@prisma/client";
+import { logger } from "../utils/logger";
+import { getPrismaClient } from "../utils/prisma";
 
 const router = Router();
 const prisma = getPrismaClient();
@@ -15,17 +13,13 @@ const prisma = getPrismaClient();
  * @optimization Batches all homepage queries together
  * ✅ Keeps existing APIs working
  * ✅ Single HTTP request instead of 3-4 requests
- * ✅ All queries run in parallel via Promise.all()
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const statsService = new StatsService();
-
-    // ✅ PARALLEL QUERIES: All run simultaneously due to Promise.all()
-    // With connection pool fixed to 20, these all execute in parallel
-    const [featuredRooms, latestRooms, citiesData, platformStats] = await Promise.all([
-      // Fetch featured rooms (most viewed this week)
-      prisma.$queryRaw<Array<{
+    const homepageRooms = await prisma.$queryRaw<
+      Array<{
+        listType: "featured" | "latest";
+        listRank: bigint | number;
         id: string;
         title: string;
         description: string;
@@ -40,92 +34,155 @@ router.get('/', async (req: Request, res: Response) => {
         isPopular: boolean;
         createdAt: Date;
         updatedAt: Date;
-      }>>`
-        SELECT DISTINCT ON (r.id) 
-          r.id,
-          r.title,
-          r.description,
-          r.city,
-          r.location,
-          r."pricePerMonth",
-          r."roomType",
-          r.images,
-          r.rating,
-          r."reviewsCount",
-          r."ownerId",
-          r."isPopular",
-          r."createdAt",
-          r."updatedAt"
-        FROM "Room" r
-        LEFT JOIN "Event" e ON r.id = e."propertyId" 
-          AND e.type = 'PROPERTY_VIEW' 
-          AND e."createdAt" >= NOW() - INTERVAL '7 days'
-        WHERE r."isActive" = true 
-          AND r."reviewStatus" = ${ReviewStatus.APPROVED}
-        GROUP BY r.id
-        ORDER BY r.id, COUNT(e.id) DESC
+      }>
+    >`
+      WITH approved_rooms AS MATERIALIZED (
+        SELECT
+          id,
+          title,
+          description,
+          city,
+          location,
+          "pricePerMonth",
+          "roomType",
+          images,
+          rating,
+          "reviewsCount",
+          "ownerId",
+          "isPopular",
+          "createdAt",
+          "updatedAt"
+        FROM "Room"
+        WHERE "isActive" = true
+          AND "reviewStatus" = ${ReviewStatus.APPROVED}::"ReviewStatus"
+      ),
+      featured AS (
+        SELECT
+          'featured' AS "listType",
+          ROW_NUMBER() OVER (
+            ORDER BY "isPopular" DESC, "createdAt" DESC, id ASC
+          ) AS "listRank",
+          *
+        FROM approved_rooms
+        ORDER BY "isPopular" DESC, "createdAt" DESC, id ASC
         LIMIT 10
-      `,
-      
-      // Fetch latest rooms
-      prisma.room.findMany({
-        where: {
-          isActive: true,
-          reviewStatus: ReviewStatus.APPROVED,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          city: true,
-          location: true,
-          pricePerMonth: true,
-          roomType: true,
-          images: true,
-          rating: true,
-          reviewsCount: true,
-          ownerId: true,
-          isPopular: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
+      ),
+      latest AS (
+        SELECT
+          'latest' AS "listType",
+          ROW_NUMBER() OVER (
+            ORDER BY "createdAt" DESC, id ASC
+          ) AS "listRank",
+          *
+        FROM approved_rooms
+        ORDER BY "createdAt" DESC, id ASC
+        LIMIT 10
+      )
+      SELECT * FROM featured
+      UNION ALL
+      SELECT * FROM latest
+      ORDER BY "listType", "listRank"
+    `;
 
-      // Fetch cities with room counts
-      prisma.$queryRaw<Array<{
-        slug: string;
-        name: string;
-        state: string;
-        totalListings: number;
-      }>>`
-        SELECT 
+    const [homepageMeta] = await prisma.$queryRaw<
+      Array<{
+        cities: Array<{
+          slug: string;
+          name: string;
+          state: string;
+          totalListings: number;
+        }>;
+        totalProperties: number;
+        totalCities: number;
+        totalOwners: number;
+      }>
+    >`
+      WITH approved_rooms AS MATERIALIZED (
+        SELECT id, city, "ownerId"
+        FROM "Room"
+        WHERE "isActive" = true
+          AND "reviewStatus" = ${ReviewStatus.APPROVED}::"ReviewStatus"
+      ),
+      city_counts AS (
+        SELECT
           c.slug,
           c.name,
           c.state,
-          COUNT(r.id)::int as "totalListings"
+          COUNT(ar.id)::int AS "totalListings"
         FROM "City" c
-        LEFT JOIN "Room" r ON c.slug = r.city 
-          AND r."isActive" = true 
-          AND r."reviewStatus" = ${ReviewStatus.APPROVED}
+        JOIN approved_rooms ar ON ar.city = c.slug
         WHERE c."isActive" = true
         GROUP BY c.id, c.slug, c.name, c.state
-        HAVING COUNT(r.id) > 0
         ORDER BY "totalListings" DESC
         LIMIT 20
-      `,
+      ),
+      grouped_stats AS (
+        SELECT
+          GROUPING(city) AS city_grouped,
+          GROUPING("ownerId") AS owner_grouped,
+          COUNT(*)::int AS row_count
+        FROM approved_rooms
+        GROUP BY GROUPING SETS ((), (city), ("ownerId"))
+      ),
+      platform_stats AS (
+        SELECT
+          COALESCE(
+            MAX(row_count) FILTER (
+              WHERE city_grouped = 1 AND owner_grouped = 1
+            ),
+            0
+          )::int AS "totalProperties",
+          COUNT(*) FILTER (
+            WHERE city_grouped = 0 AND owner_grouped = 1
+          )::int AS "totalCities",
+          COUNT(*) FILTER (
+            WHERE city_grouped = 1 AND owner_grouped = 0
+          )::int AS "totalOwners"
+        FROM grouped_stats
+      )
+      SELECT
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'slug', slug,
+                'name', name,
+                'state', state,
+                'totalListings', "totalListings"
+              )
+              ORDER BY "totalListings" DESC
+            )
+            FROM city_counts
+          ),
+          '[]'::jsonb
+        ) AS cities,
+        ps."totalProperties",
+        ps."totalCities",
+        ps."totalOwners"
+      FROM platform_stats ps
+    `;
 
-      // Fetch platform stats
-      statsService.getPlatformStats(),
-    ]);
+    const featuredRooms = homepageRooms
+      .filter((room) => room.listType === "featured")
+      .sort((a, b) => Number(a.listRank) - Number(b.listRank))
+      .map(({ listType, listRank, ...room }) => room);
+    const latestRooms = homepageRooms
+      .filter((room) => room.listType === "latest")
+      .sort((a, b) => Number(a.listRank) - Number(b.listRank))
+      .map(({ listType, listRank, ...room }) => room);
+    const citiesData = homepageMeta?.cities ?? [];
+    const platformStats = {
+      totalProperties: homepageMeta?.totalProperties ?? 0,
+      totalCities: homepageMeta?.totalCities ?? 0,
+      totalOwners: homepageMeta?.totalOwners ?? 0,
+    };
 
     res.json({
       success: true,
       data: {
         featured: featuredRooms,
         latest: latestRooms,
-        cities: citiesData.map(c => ({
+        cities: citiesData.map((c) => ({
           id: c.slug,
           name: c.name,
           state: c.state,
@@ -135,12 +192,12 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error('Error fetching homepage data', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error("Error fetching homepage data", {
+      error: error instanceof Error ? error.message : "Unknown error",
     });
     res.status(500).json({
       success: false,
-      message: 'Failed to load homepage data',
+      message: "Failed to load homepage data",
     });
   }
 });

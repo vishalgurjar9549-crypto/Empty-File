@@ -342,7 +342,6 @@ export function RoomsListing() {
 
   /* ── Fetch next page ── */
   const fetchNextPage = useCallback(async () => {
- 
     // ✅ Guard: prevent duplicate fetches
     if (
       lockRef.current || // ✅ HARD LOCK
@@ -366,11 +365,11 @@ export function RoomsListing() {
       const result = await dispatch(
         fetchRooms({ ...baseFilters, page: nextPage }),
       ).unwrap();
-   console.log(
-  "PAGE:",
-  nextPage,
-  result.rooms.map((r: any) => r.id)
-);
+      console.log(
+        "PAGE:",
+        nextPage,
+        result.rooms.map((r: any) => r.id),
+      );
       // ✅ Guard: no results = end of pagination
       if (!result?.rooms?.length) {
         setHasMore(false);
@@ -381,16 +380,16 @@ export function RoomsListing() {
 
       // ✅ SINGLE state update: append with deduplication
       setAllRooms((prev) => {
-  const updated = [...prev, ...result.rooms];
+        const updated = [...prev, ...result.rooms];
 
-  if (result.meta?.total && updated.length >= result.meta.total) {
-    setHasMore(false);
-  } else if (result.rooms.length < PAGE_LIMIT) {
-    setHasMore(false);
-  }
+        if (result.meta?.total && updated.length >= result.meta.total) {
+          setHasMore(false);
+        } else if (result.rooms.length < PAGE_LIMIT) {
+          setHasMore(false);
+        }
 
-  return updated;
-});
+        return updated;
+      });
     } catch (e) {
       console.error("[RoomsListing] fetchNextPage error", e);
       setHasMore(false);

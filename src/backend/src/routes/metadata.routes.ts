@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Request, Response } from "express";
-import { prisma } from "../utils/prisma";
+import { getPrismaClient } from "../utils/prisma";
 import {
   AMENITIES_LIST,
   getAmenitiesByCategory,
@@ -9,6 +9,7 @@ import {
 } from "../config/amenities.config";
 
 const router = Router();
+const prisma = getPrismaClient();
 let cachedCities: any = null;
 let lastFetch = 0;
 /**

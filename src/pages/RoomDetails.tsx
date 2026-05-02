@@ -401,16 +401,6 @@ export function RoomDetails() {
     setMetaTag("name", "twitter:image", imageUrl);
   }, [room]);
 
-  useEffect(() => {
-    if (!room?.id || !room?.city || room.city === "undefined") return;
-
-    dispatch(
-      fetchVisibility({
-        propertyId: room.id,
-        city: room.city,
-      })
-    );
-  }, [room?.id, room?.city, dispatch]);
 
   useEffect(() => {
     if (!room?.id || !room?.city || authStatus !== "AUTHENTICATED") return;
